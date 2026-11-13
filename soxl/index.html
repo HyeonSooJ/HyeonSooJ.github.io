@@ -50,6 +50,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .chipbtn.on,#allBtn.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 select.on,input.on{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg)}
 #allBtn{font-weight:600}
+.save{font-weight:600;border-color:var(--fg)}
 .gridhead{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted);align-items:center}
 .gridhead .title{color:var(--fg);font-weight:600;font-size:13px}
 .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
@@ -83,6 +84,7 @@ select.on,input.on{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg)}
     <div class="nav">
       <button id="prev" type="button" aria-label="이전 날">◀ 이전 날</button>
       <button id="next" type="button" aria-label="다음 날">다음 날 ▶</button>
+      <button id="saveBig" type="button" class="save">⬇ 사진 저장</button>
     </div>
   </div>
   <div class="bigwrap"><canvas id="big"></canvas><div id="tip" hidden></div></div>
@@ -98,8 +100,11 @@ select.on,input.on{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg)}
     <span class="lbl">요일별</span>
   </div>
   <div class="grp">
-    <span class="lbl">특정 날짜</span>
-    <input type="date" id="dateIn" aria-label="날짜 선택">
+    <span class="lbl">기간</span>
+    <input type="date" id="dateIn" aria-label="시작 날짜">
+    <span class="lbl">~</span>
+    <input type="date" id="dateIn2" aria-label="끝 날짜">
+    <button id="rangeBtn" type="button">기간 보기</button>
   </div>
 </section>
 
@@ -110,6 +115,10 @@ select.on,input.on{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg)}
     <span><i class="sw" style="background:var(--up)"></i>상승 마감</span>
     <span><i class="sw" style="background:var(--down)"></i>하락 마감</span>
     <span>점선 = 시가 · 굵은 왼쪽 선 = 매월 1일</span>
+    <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
+      <button id="saveGrid" type="button" class="save">⬇ 모아보기 한 장 저장</button>
+      <button id="saveDays" type="button" class="save">⬇ 하루씩 사진으로 폴더에 저장</button>
+    </span>
   </div>
   <div id="grid" style="margin-top:8px"></div>
 </section>
@@ -138,7 +147,8 @@ function setup(cv){const r=cv.getBoundingClientRect(),dp=window.devicePixelRatio
 /* ---------- big chart ---------- */
 const big=document.getElementById('big'),tip=document.getElementById('tip');let geo=null;
 function niceStep(r,n){const s=r/n,m=Math.pow(10,Math.floor(Math.log10(s))),f=s/m;return (f<1.5?1:f<3?2:f<7?5:10)*m}
-function drawBig(){const x=dayInfo[sel];const [g,W,H]=setup(big);g.clearRect(0,0,W,H);
+function drawBig(){const [g,W,H]=setup(big);g.clearRect(0,0,W,H);geo=drawChart(g,W,H,dayInfo[sel])}
+function drawChart(g,W,H,x){
   const L=6,R=56,T=10,B=22,pw=W-L-R,ph=H-T-B;const pad=(x.h-x.l)*.04||1,hi=x.h+pad,lo=x.l-pad;
   const Y=v=>T+(hi-v)/(hi-lo)*ph,bw=pw/480,X=k=>L+(k+.5)*bw;
   const fg=css('--fg'),mu=css('--muted'),ln=css('--line'),up=css('--up'),dn=css('--down');
@@ -152,7 +162,7 @@ function drawBig(){const x=dayInfo[sel];const [g,W,H]=setup(big);g.clearRect(0,0
   g.strokeStyle=mu;g.setLineDash([3,3]);g.beginPath();g.moveTo(L,Math.round(Y(x.o))+.5);g.lineTo(L+pw,Math.round(Y(x.o))+.5);g.stroke();g.setLineDash([]);
   g.textBaseline='middle';g.font='600 11px '+css('--mono');
   [[x.hi,x.h,-1,'고 '],[x.li,x.l,1,'저 ']].forEach(([i,v,dir,t])=>{const xx=X(i+x.st),y=Y(v)+dir*10;g.fillStyle=fg;const right=xx>L+pw-110;g.textAlign=right?'right':'left';g.fillText(t+p(v)+' '+tm(i+x.st),xx+(right?-4:4),y)});
-  geo={L,bw}}
+  return {L,bw}}
 function select(i,scroll){sel=Math.max(0,Math.min(LAST,i));const x=dayInfo[sel];
   cells.forEach(c=>c.el.classList.toggle('on',c.i===sel));
   document.getElementById('dDate').textContent=`${x.d} (${WD[x.wd]}) 09:00 ~ 익일 09:00`;
@@ -173,15 +183,16 @@ addEventListener('keydown',e=>{if(e.target.matches('input,select'))return;if(e.k
 
 /* ---------- grid views ---------- */
 const grid=document.getElementById('grid'),gridSec=document.getElementById('gridSec');let cells=[];
-function drawMini(c){const x=dayInfo[c.i],cv=c.el.querySelector('canvas');const [g,W,H]=setup(cv);
-  g.clearRect(0,0,W,H);const top=H>60?16:12,bot=2,ph=H-top-bot,rng=Math.max(1,x.h-x.l);
+function drawMini(c){const cv=c.el.querySelector('canvas');const [g,W,H]=setup(cv);g.clearRect(0,0,W,H);miniTo(g,W,H,dayInfo[c.i])}
+function miniTo(g,W,H,x){const top=H>60?16:12,bot=2,ph=H-top-bot,rng=Math.max(1,x.h-x.l);
   const Y=v=>top+(x.h-v)/rng*ph;const up=css('--up'),dn=css('--down');
   const cols=Math.max(1,Math.floor(W-4)),per=480/cols,bw=Math.max(1,Math.floor(cols/480*0.8))||1;
   for(let col=0;col<cols;col++){const s0=Math.floor(col*per)-x.st,s1=Math.max(Math.floor((col+1)*per)-x.st,s0+1);
     let h=-1,l=1e12,o=null,cl=null;for(let k=Math.max(0,s0);k<Math.min(x.n,s1);k++){const a=x.a;if(o===null)o=a[k*5];cl=a[k*5+3];if(a[k*5+1]>h)h=a[k*5+1];if(a[k*5+2]<l)l=a[k*5+2]}
     if(o===null)continue;g.fillStyle=cl>=o?up:dn;const y1=Y(h),y2=Y(l);g.fillRect(2+col,y1,1,Math.max(1,y2-y1))}
   g.strokeStyle=css('--wick');g.setLineDash([2,2]);g.lineWidth=1;g.beginPath();g.moveTo(2,Math.round(Y(x.o))+.5);g.lineTo(W-2,Math.round(Y(x.o))+.5);g.stroke();g.setLineDash([])}
-function showGrid(idx,title){gridSec.hidden=false;grid.innerHTML='';cells=[];
+let curIdx=[],curTitle='',curFile='';
+function showGrid(idx,title,file){curIdx=idx;curTitle=title;curFile=file||title;gridSec.hidden=false;grid.innerHTML='';cells=[];
   const n=idx.length,root=document.documentElement.style;
   if(n>60){root.setProperty('--cw','68px');root.setProperty('--ch','50px');root.setProperty('--fs','9px')}
   else if(n>12){root.setProperty('--cw','130px');root.setProperty('--ch','84px');root.setProperty('--fs','10.5px')}
@@ -201,16 +212,79 @@ function showGrid(idx,title){gridSec.hidden=false;grid.innerHTML='';cells=[];
 const allIdx=dayInfo.map((_,i)=>i);
 const allBtn=document.getElementById('allBtn'),monthSel=document.getElementById('monthSel'),dateIn=document.getElementById('dateIn'),wdGrp=document.getElementById('wdGrp');
 function clearOn(){allBtn.classList.remove('on');monthSel.classList.remove('on');dateIn.classList.remove('on');wdGrp.querySelectorAll('.chipbtn').forEach(b=>b.classList.remove('on'))}
-allBtn.onclick=()=>{clearOn();allBtn.classList.add('on');monthSel.value='';showGrid(allIdx,'전체')};
+allBtn.onclick=()=>{clearOn();allBtn.classList.add('on');monthSel.value='';showGrid(allIdx,'전체','all')};
 [...new Set(dayInfo.map(x=>x.m))].forEach(m=>{const o=document.createElement('option');o.value=m;const [y,mm]=m.split('-');o.textContent=`${y}년 ${+mm}월`;monthSel.appendChild(o)});
 monthSel.onchange=()=>{if(!monthSel.value)return;clearOn();monthSel.classList.add('on');const [y,mm]=monthSel.value.split('-');
-  showGrid(allIdx.filter(i=>dayInfo[i].m===monthSel.value),`${y}년 ${+mm}월`)};
+  showGrid(allIdx.filter(i=>dayInfo[i].m===monthSel.value),`${y}년 ${+mm}월`,monthSel.value)};
 [1,2,3,4,5,6,0].forEach(w=>{const b=document.createElement('button');b.type='button';b.className='chipbtn';b.textContent=WD[w];b.setAttribute('aria-label',WD[w]+'요일');
-  b.onclick=()=>{clearOn();b.classList.add('on');monthSel.value='';showGrid(allIdx.filter(i=>dayInfo[i].wd===w),`${WD[w]}요일`)};wdGrp.appendChild(b)});
-dateIn.min=dayInfo[0].d;dateIn.max=dayInfo[LAST].d;dateIn.value=dayInfo[LAST].d;
-dateIn.onchange=()=>{const i=dayInfo.findIndex(x=>x.d===dateIn.value);clearOn();dateIn.classList.add('on');monthSel.value='';
-  if(i<0){showGrid([],`${dateIn.value}: 데이터 없음 (${dayInfo[0].d} ~ ${dayInfo[LAST].d} 사이로 골라 주세요)`);return}
-  select(i);showGrid([i],`${dateIn.value} (${WD[dayInfo[i].wd]})`)};
+  b.onclick=()=>{clearOn();b.classList.add('on');monthSel.value='';showGrid(allIdx.filter(i=>dayInfo[i].wd===w),`${WD[w]}요일`,WDE[w])};wdGrp.appendChild(b)});
+const dateIn2=document.getElementById('dateIn2');
+[dateIn,dateIn2].forEach(e=>{e.min=dayInfo[0].d;e.max=dayInfo[LAST].d});
+dateIn.value=dayInfo[Math.max(0,LAST-6)].d;dateIn2.value=dayInfo[LAST].d;
+dateIn.onchange=()=>{if(dateIn2.value&&dateIn.value>dateIn2.value)dateIn2.value=dateIn.value};
+dateIn2.onchange=()=>{if(dateIn.value&&dateIn2.value<dateIn.value)dateIn.value=dateIn2.value};
+document.getElementById('rangeBtn').onclick=()=>{let a=dateIn.value||dayInfo[0].d,b=dateIn2.value||a;if(a>b)[a,b]=[b,a];
+  clearOn();dateIn.classList.add('on');dateIn2.classList.add('on');monthSel.value='';
+  const idx=allIdx.filter(i=>dayInfo[i].d>=a&&dayInfo[i].d<=b);
+  if(!idx.length){showGrid([],`${a} ~ ${b}: 데이터 없음 (${dayInfo[0].d} ~ ${dayInfo[LAST].d} 사이로 골라 주세요)`);return}
+  select(idx[0]);showGrid(idx,a===b?`${a} (${WD[dayInfo[idx[0]].wd]})`:`${a} ~ ${b}`,a===b?a:`${a}_${b}`)};
+
+/* ---------- 사진(PNG) 저장 ---------- */
+function savePNG(cv,name){cv.toBlob(b=>{const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)},'image/png')}
+const SRC='출처: Binance USDⓈ-M 선물 SOXLUSDT 3분봉 · 하루 = 한국시간 09:00~익일 08:57 · hyeonsooj.github.io/soxl';
+function headLine(x){const v=pct(x);return [`${x.d} (${WD[x.wd]}) 09:00 ~ 익일 09:00`,`${v>=0?'+':''}${v.toFixed(2)}%`,
+  `시 ${p(x.o)}  고 ${p(x.h)} (${tm(x.hi+x.st)})  저 ${p(x.l)} (${tm(x.li+x.st)})  종 ${p(x.c)}`,v]}
+const WDE=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function renderDay(x){const S=2,W=1600,H=860;
+  const cv=document.createElement('canvas');cv.width=W*S;cv.height=H*S;const g=cv.getContext('2d');g.scale(S,S);
+  g.fillStyle=css('--bg');g.fillRect(0,0,W,H);const [t1,t2,t3,v]=headLine(x);
+  g.textBaseline='alphabetic';g.textAlign='left';g.fillStyle=css('--fg');g.font='700 22px '+css('--sans');g.fillText('SOXLUSDT 3분봉',24,40);
+  g.font='600 18px '+css('--mono');g.fillText(t1,24,72);let w=g.measureText(t1).width;
+  g.fillStyle=css(v>=0?'--up':'--down');g.fillText(t2,24+w+16,72);w+=g.measureText(t2).width+32;
+  g.fillStyle=css('--muted');g.font='15px '+css('--mono');g.fillText(t3,24+w,72);
+  g.save();g.translate(16,92);drawChart(g,W-32,H-92-40,x);g.restore();
+  g.fillStyle=css('--muted');g.font='12px '+css('--sans');g.fillText(SRC,24,H-14);return cv}
+document.getElementById('saveBig').onclick=()=>{const x=dayInfo[sel];savePNG(renderDay(x),`SOXL_3m_${x.d}_${WDE[x.wd]}.png`)};
+const toBlob=cv=>new Promise(r=>cv.toBlob(r,'image/png'));
+function loadZip(){return window.JSZip?Promise.resolve():new Promise((ok,no)=>{const s=document.createElement('script');s.src='jszip.min.js';s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
+document.getElementById('saveDays').onclick=async()=>{if(!curIdx.length)return;
+  const btn=document.getElementById('saveDays'),label=btn.textContent,folder=`SOXL_3m_${curFile}`,n=curIdx.length;
+  const prog=k=>btn.textContent=`저장 중… ${k}/${n}`;btn.disabled=true;
+  try{
+    if(window.showDirectoryPicker){ // Chrome·Edge: 고른 위치에 폴더를 만들고 하루씩 PNG 저장
+      let root;try{root=await showDirectoryPicker({mode:'readwrite',id:'soxl'})}catch(e){return}
+      const dir=await root.getDirectoryHandle(folder,{create:true});
+      for(let k=0;k<n;k++){const x=dayInfo[curIdx[k]];prog(k+1);const blob=await toBlob(renderDay(x));
+        const fh=await dir.getFileHandle(`SOXL_3m_${x.d}_${WDE[x.wd]}.png`,{create:true});const w=await fh.createWritable();await w.write(blob);await w.close()}
+      btn.textContent=`완료: ${folder} 폴더에 ${n}장`;
+    }else{ // 그 밖의 브라우저: 폴더째 ZIP 한 개로
+      await loadZip();const zip=new JSZip(),f=zip.folder(folder);
+      for(let k=0;k<n;k++){const x=dayInfo[curIdx[k]];prog(k+1);f.file(`SOXL_3m_${x.d}_${WDE[x.wd]}.png`,await toBlob(renderDay(x)))}
+      btn.textContent='압축 중…';const z=await zip.generateAsync({type:'blob'});
+      const u=URL.createObjectURL(z),a=document.createElement('a');a.href=u;a.download=folder+'.zip';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);
+      btn.textContent=`완료: ${folder}.zip (${n}장)`;
+    }
+  }catch(e){btn.textContent='저장 실패: '+e.message}
+  finally{btn.disabled=false;setTimeout(()=>btn.textContent=label,4000)}};
+document.getElementById('saveGrid').onclick=()=>{if(!curIdx.length)return;
+  const n=curIdx.length,first=cells[0].el.getBoundingClientRect();
+  const cols=Math.max(1,getComputedStyle(grid).gridTemplateColumns.split(' ').length);
+  const cw=Math.round(first.width),ch=Math.round(first.height),gap=4,pad=20,head=70,foot=30,S=2;
+  const rows=Math.ceil(n/cols),W=pad*2+cols*cw+(cols-1)*gap,H=head+rows*ch+(rows-1)*gap+foot+pad;
+  const cv=document.createElement('canvas');cv.width=W*S;cv.height=H*S;const g=cv.getContext('2d');g.scale(S,S);
+  g.fillStyle=css('--bg');g.fillRect(0,0,W,H);g.textBaseline='alphabetic';g.textAlign='left';
+  g.fillStyle=css('--fg');g.font='700 20px '+css('--sans');g.fillText('SOXLUSDT 3분봉',pad,34);
+  g.font='600 14px '+css('--sans');g.fillText(document.getElementById('gTitle').textContent,pad,58);
+  const fs=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--fs'))||9;
+  let lastM='';curIdx.forEach((i,k)=>{const x=dayInfo[i],v=pct(x),cx=pad+(k%cols)*(cw+gap),cy=head+Math.floor(k/cols)*(ch+gap);
+    g.fillStyle=css('--panel');g.fillRect(cx,cy,cw,ch);g.strokeStyle=css(i===sel?'--sel':'--line');g.lineWidth=i===sel?2:1;g.strokeRect(cx+.5,cy+.5,cw-1,ch-1);
+    if(n>60&&x.m!==lastM){g.fillStyle=css('--muted');g.fillRect(cx,cy,2,ch)}lastM=x.m;
+    g.save();g.beginPath();g.rect(cx,cy,cw,ch);g.clip();g.translate(cx,cy);miniTo(g,cw,ch,x);g.restore();
+    g.textBaseline='top';g.font=fs+'px '+css('--mono');g.fillStyle=css('--muted');g.textAlign='left';
+    g.fillText(n>60?`${+x.d.slice(5,7)}/${+x.d.slice(8)}`:`${+x.d.slice(5,7)}/${+x.d.slice(8)} (${WD[x.wd]})`,cx+3,cy+2);
+    g.font='600 '+fs+'px '+css('--mono');g.fillStyle=css(v>=0?'--up':'--down');g.textAlign='right';g.fillText(`${v>=0?'+':''}${v.toFixed(1)}%`,cx+cw-3,cy+2)});
+  g.textBaseline='alphabetic';g.textAlign='left';g.fillStyle=css('--muted');g.font='12px '+css('--sans');g.fillText(SRC,pad,H-pad+4);
+  savePNG(cv,`SOXL_3m_${curFile}_grid.png`)};
 
 function redraw(){drawBig();cells.forEach(drawMini)}
 let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(redraw,120)});
