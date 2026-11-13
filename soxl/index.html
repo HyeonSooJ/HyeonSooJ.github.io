@@ -12,15 +12,16 @@
 :root{
   --bg:#f6f7f9; --panel:#ffffff; --fg:#14171c; --muted:#6a7280; --line:#e2e5ea; --chip:#eef0f3;
   --up:#d6283a; --down:#1f5fd1; --sel:#14171c; --wick:#9aa1ad;
+  --so:#b86e00; --sc:#7b3fd0; --sess:rgba(120,130,150,.09);
   --sans:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
   --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0f1216; --panel:#161a20; --fg:#e8ebf0; --muted:#8b93a1; --line:#262c35; --chip:#1f242c;
-  --up:#ff5468; --down:#4d8dff; --sel:#e8ebf0; --wick:#5c6470; color-scheme:dark}}
+  --up:#ff5468; --down:#4d8dff; --sel:#e8ebf0; --wick:#5c6470; --so:#f0a43a; --sc:#b98cff; --sess:rgba(160,170,190,.10); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f1216; --panel:#161a20; --fg:#e8ebf0; --muted:#8b93a1; --line:#262c35; --chip:#1f242c;
-  --up:#ff5468; --down:#4d8dff; --sel:#e8ebf0; --wick:#5c6470; color-scheme:dark}
+  --up:#ff5468; --down:#4d8dff; --sel:#e8ebf0; --wick:#5c6470; --so:#f0a43a; --sc:#b98cff; --sess:rgba(160,170,190,.10); color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
@@ -114,7 +115,7 @@ select.on,input.on{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg)}
     <span>칸을 누르면 위 차트가 그날로 바뀝니다</span>
     <span><i class="sw" style="background:var(--up)"></i>상승 마감</span>
     <span><i class="sw" style="background:var(--down)"></i>하락 마감</span>
-    <span>점선 = 시가 · 굵은 왼쪽 선 = 매월 1일</span>
+    <span><i class="sw" style="background:var(--so)"></i>주식 시가 <i class="sw" style="background:var(--sc);margin-left:6px"></i>주식 종가 (점선) · 회색 띠 = 미국 정규장 · 굵은 왼쪽 선 = 매월 1일</span>
     <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
       <button id="saveGrid" type="button" class="save">⬇ 모아보기 한 장 저장</button>
       <button id="saveDays" type="button" class="save">⬇ 하루씩 사진으로 폴더에 저장</button>
@@ -123,9 +124,10 @@ select.on,input.on{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg)}
   <div id="grid" style="margin-top:8px"></div>
 </section>
 
-<div class="note">출처: Binance USDⓈ-M 선물 SOXLUSDT 3분봉 공식 아카이브(data.binance.vision). 하루 = 한국시간 09:00 ~ 익일 08:57 봉. 상장 2026-05-15 23:00 KST. 요일은 그날 09:00(한국시간) 기준. · <a href="SOXL_3m.xlsx">엑셀 다운로드</a></div>
+<div class="note">출처: Binance USDⓈ-M 선물 SOXLUSDT 3분봉 공식 아카이브(data.binance.vision). 하루 = 한국시간 09:00 ~ 익일 08:57 봉. 상장 2026-05-15 23:00 KST. 요일은 그날 09:00(한국시간) 기준. 점선 = 실제 SOXL ETF(NYSE Arca) 정규장 시가·종가(출처: Yahoo Finance), 회색 띠 = 미국 정규장 시간. · <a href="SOXL_3m.xlsx">엑셀 다운로드</a></div>
 
 <script src="data.js"></script>
+<script src="stock.js"></script>
 <script>
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const WD=['일','월','화','수','목','금','토'];
@@ -148,18 +150,24 @@ function setup(cv){const r=cv.getBoundingClientRect(),dp=window.devicePixelRatio
 const big=document.getElementById('big'),tip=document.getElementById('tip');let geo=null;
 function niceStep(r,n){const s=r/n,m=Math.pow(10,Math.floor(Math.log10(s))),f=s/m;return (f<1.5?1:f<3?2:f<7?5:10)*m}
 function drawBig(){const [g,W,H]=setup(big);g.clearRect(0,0,W,H);geo=drawChart(g,W,H,dayInfo[sel])}
-function drawChart(g,W,H,x){
-  const L=6,R=56,T=10,B=22,pw=W-L-R,ph=H-T-B;const pad=(x.h-x.l)*.04||1,hi=x.h+pad,lo=x.l-pad;
+function drawChart(g,W,H,x){const sk=STOCK[x.d];
+  const L=6,R=56,T=10,B=22,pw=W-L-R,ph=H-T-B;let H0=x.h,L0=x.l;if(sk){H0=Math.max(H0,sk[0],sk[1]);L0=Math.min(L0,sk[0],sk[1])}const pad=(H0-L0)*.04||1,hi=H0+pad,lo=L0-pad;
   const Y=v=>T+(hi-v)/(hi-lo)*ph,bw=pw/480,X=k=>L+(k+.5)*bw;
   const fg=css('--fg'),mu=css('--muted'),ln=css('--line'),up=css('--up'),dn=css('--down');
   g.font='11px '+css('--mono');g.textBaseline='middle';g.lineWidth=1;
+  if(sk){g.fillStyle=css('--sess');g.fillRect(L+sk[2]*bw,T,(sk[3]-sk[2])*bw,ph)}
   const st=niceStep(hi-lo,6);for(let v=Math.ceil(lo/st)*st;v<=hi;v+=st){const y=Math.round(Y(v))+.5;g.strokeStyle=ln;g.beginPath();g.moveTo(L,y);g.lineTo(L+pw,y);g.stroke();g.fillStyle=mu;g.textAlign='left';g.fillText(p(v),L+pw+6,y)}
   g.textAlign='center';g.textBaseline='top';const step=W<600?80:40;
   for(let k=0;k<=480;k+=step){const xx=Math.round(L+k*bw)+.5;g.strokeStyle=ln;g.beginPath();g.moveTo(xx,T);g.lineTo(xx,T+ph);g.stroke();g.fillStyle=mu;g.fillText(k<480?tm(k):'09:00',Math.max(L+16,Math.min(xx,L+pw-14)),T+ph+6)}
   for(let i=0;i<x.n;i++){const a=x.a,o=a[i*5],h=a[i*5+1],l=a[i*5+2],c=a[i*5+3],k=i+x.st;
     const xx=X(k);g.fillStyle=c>=o?up:dn;g.fillRect(Math.round(xx-.5),Y(h),1,Math.max(1,Y(l)-Y(h)));
     const w=Math.max(1,bw*.7),y1=Y(Math.max(o,c)),y2=Y(Math.min(o,c));g.fillRect(xx-w/2,y1,w,Math.max(1,y2-y1))}
-  g.strokeStyle=mu;g.setLineDash([3,3]);g.beginPath();g.moveTo(L,Math.round(Y(x.o))+.5);g.lineTo(L+pw,Math.round(Y(x.o))+.5);g.stroke();g.setLineDash([]);
+  if(sk){g.lineWidth=1.5;g.setLineDash([5,4]);g.textBaseline='bottom';g.font='600 11px '+css('--mono');
+    [[sk[0],'--so','주식 시가 ',sk[2],'미국장 개장 '],[sk[1],'--sc','주식 종가 ',sk[3],'미국장 마감 ']].forEach(([v,c,t,k,tt],j)=>{const y=Math.round(Y(v))+.5,col=css(c);
+      g.strokeStyle=col;g.beginPath();g.moveTo(L,y);g.lineTo(L+pw,y);g.stroke();
+      g.textAlign='left';const s=t+p(v)+' ('+tm(k)+')',tw=g.measureText(s).width,lx=Math.min(L+k*bw+4,L+pw-tw-6),ly=y-3+(j===1&&Math.abs(Y(sk[0])-Y(sk[1]))<16&&Y(sk[1])>Y(sk[0])?16:0);
+      g.fillStyle=css('--panel');g.globalAlpha=.85;g.fillRect(lx-3,ly-14,tw+6,15);g.globalAlpha=1;g.fillStyle=col;g.fillText(s,lx,ly)});
+    g.setLineDash([]);g.lineWidth=1}
   g.textBaseline='middle';g.font='600 11px '+css('--mono');
   [[x.hi,x.h,-1,'고 '],[x.li,x.l,1,'저 ']].forEach(([i,v,dir,t])=>{const xx=X(i+x.st),y=Y(v)+dir*10;g.fillStyle=fg;const right=xx>L+pw-110;g.textAlign=right?'right':'left';g.fillText(t+p(v)+' '+tm(i+x.st),xx+(right?-4:4),y)});
   return {L,bw}}
@@ -168,7 +176,7 @@ function select(i,scroll){sel=Math.max(0,Math.min(LAST,i));const x=dayInfo[sel];
   document.getElementById('dDate').textContent=`${x.d} (${WD[x.wd]}) 09:00 ~ 익일 09:00`;
   document.getElementById('dBadge').hidden=sel!==LAST;
   const pc=pct(x),e=document.getElementById('dChg');e.textContent=(pc>=0?'+':'')+pc.toFixed(2)+'%';e.className='chg '+(pc>=0?'up':'down');
-  document.getElementById('dKv').innerHTML=`시 <b>${p(x.o)}</b> 고 <b>${p(x.h)}</b> (${tm(x.hi+x.st)}) 저 <b>${p(x.l)}</b> (${tm(x.li+x.st)}) 종 <b>${p(x.c)}</b> · ${x.n}봉`;
+  document.getElementById('dKv').innerHTML=`시 <b>${p(x.o)}</b> 고 <b>${p(x.h)}</b> (${tm(x.hi+x.st)}) 저 <b>${p(x.l)}</b> (${tm(x.li+x.st)}) 종 <b>${p(x.c)}</b> · ${x.n}봉 &nbsp;|&nbsp; ${stockTxt(x,true)}`;
   document.getElementById('prev').disabled=sel===0;document.getElementById('next').disabled=sel===LAST;
   drawBig();tip.hidden=true;
   if(scroll)document.querySelector('.detail').scrollIntoView({behavior:'smooth',block:'start'})}
@@ -184,13 +192,15 @@ addEventListener('keydown',e=>{if(e.target.matches('input,select'))return;if(e.k
 /* ---------- grid views ---------- */
 const grid=document.getElementById('grid'),gridSec=document.getElementById('gridSec');let cells=[];
 function drawMini(c){const cv=c.el.querySelector('canvas');const [g,W,H]=setup(cv);g.clearRect(0,0,W,H);miniTo(g,W,H,dayInfo[c.i])}
-function miniTo(g,W,H,x){const top=H>60?16:12,bot=2,ph=H-top-bot,rng=Math.max(1,x.h-x.l);
-  const Y=v=>top+(x.h-v)/rng*ph;const up=css('--up'),dn=css('--down');
+function miniTo(g,W,H,x){const sk=STOCK[x.d],sx=v=>2+v/480*(W-4);let H0=x.h,L0=x.l;if(sk){H0=Math.max(H0,sk[0],sk[1]);L0=Math.min(L0,sk[0],sk[1])}
+  const top=H>60?16:12,bot=2,ph=H-top-bot,rng=Math.max(1,H0-L0);
+  const Y=v=>top+(H0-v)/rng*ph;const up=css('--up'),dn=css('--down');
+  if(sk){g.fillStyle=css('--sess');g.fillRect(sx(sk[2]),top,sx(sk[3])-sx(sk[2]),ph)}
   const cols=Math.max(1,Math.floor(W-4)),per=480/cols,bw=Math.max(1,Math.floor(cols/480*0.8))||1;
   for(let col=0;col<cols;col++){const s0=Math.floor(col*per)-x.st,s1=Math.max(Math.floor((col+1)*per)-x.st,s0+1);
     let h=-1,l=1e12,o=null,cl=null;for(let k=Math.max(0,s0);k<Math.min(x.n,s1);k++){const a=x.a;if(o===null)o=a[k*5];cl=a[k*5+3];if(a[k*5+1]>h)h=a[k*5+1];if(a[k*5+2]<l)l=a[k*5+2]}
     if(o===null)continue;g.fillStyle=cl>=o?up:dn;const y1=Y(h),y2=Y(l);g.fillRect(2+col,y1,1,Math.max(1,y2-y1))}
-  g.strokeStyle=css('--wick');g.setLineDash([2,2]);g.lineWidth=1;g.beginPath();g.moveTo(2,Math.round(Y(x.o))+.5);g.lineTo(W-2,Math.round(Y(x.o))+.5);g.stroke();g.setLineDash([])}
+  if(sk){g.setLineDash([3,2]);g.lineWidth=1;[[sk[0],'--so'],[sk[1],'--sc']].forEach(([v,c])=>{const y=Math.round(Math.max(top,Math.min(top+ph,Y(v))))+.5;g.strokeStyle=css(c);g.beginPath();g.moveTo(2,y);g.lineTo(W-2,y);g.stroke()});g.setLineDash([])}}
 let curIdx=[],curTitle='',curFile='';
 function showGrid(idx,title,file){curIdx=idx;curTitle=title;curFile=file||title;gridSec.hidden=false;grid.innerHTML='';cells=[];
   const n=idx.length,root=document.documentElement.style;
@@ -231,9 +241,11 @@ document.getElementById('rangeBtn').onclick=()=>{let a=dateIn.value||dayInfo[0].
 
 /* ---------- 사진(PNG) 저장 ---------- */
 function savePNG(cv,name){cv.toBlob(b=>{const u=URL.createObjectURL(b),a=document.createElement('a');a.href=u;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),2000)},'image/png')}
-const SRC='출처: Binance USDⓈ-M 선물 SOXLUSDT 3분봉 · 하루 = 한국시간 09:00~익일 08:57 · hyeonsooj.github.io/soxl';
+const SRC='출처: Binance USDⓈ-M 선물 SOXLUSDT 3분봉 · 점선 = SOXL ETF 정규장 시가(주황)·종가(보라), Yahoo Finance · 회색 띠 = 미국 정규장 · 하루 = 한국시간 09:00~익일 08:57 · hyeonsooj.github.io/soxl';
 function headLine(x){const v=pct(x);return [`${x.d} (${WD[x.wd]}) 09:00 ~ 익일 09:00`,`${v>=0?'+':''}${v.toFixed(2)}%`,
-  `시 ${p(x.o)}  고 ${p(x.h)} (${tm(x.hi+x.st)})  저 ${p(x.l)} (${tm(x.li+x.st)})  종 ${p(x.c)}`,v]}
+  `시 ${p(x.o)}  고 ${p(x.h)} (${tm(x.hi+x.st)})  저 ${p(x.l)} (${tm(x.li+x.st)})  종 ${p(x.c)}   |   ${stockTxt(x)}`,v]}
+function stockTxt(x,html){const sk=STOCK[x.d];if(!sk)return '주식: 미국장 휴장(주말·공휴일)';const v=(sk[1]/sk[0]-1)*100,s=(v>=0?'+':'')+v.toFixed(2)+'%';
+  return html?`주식 시가 <b style="color:var(--so)">${p(sk[0])}</b> → 종가 <b style="color:var(--sc)">${p(sk[1])}</b> (${s})`:`주식 시가 ${p(sk[0])} → 종가 ${p(sk[1])} (${s})`}
 const WDE=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 function renderDay(x){const S=2,W=1600,H=860;
   const cv=document.createElement('canvas');cv.width=W*S;cv.height=H*S;const g=cv.getContext('2d');g.scale(S,S);
