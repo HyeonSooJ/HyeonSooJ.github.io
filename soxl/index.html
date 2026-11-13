@@ -118,8 +118,10 @@ select.on,input.on{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg)}
     <span><i class="sw" style="background:var(--so)"></i>주식 시가 <i class="sw" style="background:var(--sc);margin-left:6px"></i>주식 종가 (점선) · 회색 띠 = 미국 정규장 · 굵은 왼쪽 선 = 매월 1일</span>
     <span style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">
       <button id="saveGrid" type="button" class="save">⬇ 모아보기 한 장 저장</button>
-      <button id="saveDays" type="button" class="save">⬇ 하루씩 사진으로 폴더에 저장</button>
+      <button id="saveDays" type="button" class="save">⬇ 하루씩 폴더에 저장</button>
+      <button id="saveZip" type="button" class="save">⬇ 하루씩 ZIP으로 받기</button>
     </span>
+    <span id="saveMsg" role="status" style="flex-basis:100%;text-align:right;font-size:12px"></span>
   </div>
   <div id="grid" style="margin-top:8px"></div>
 </section>
@@ -259,25 +261,34 @@ function renderDay(x){const S=2,W=1600,H=860;
 document.getElementById('saveBig').onclick=()=>{const x=dayInfo[sel];savePNG(renderDay(x),`SOXL_3m_${x.d}_${WDE[x.wd]}.png`)};
 const toBlob=cv=>new Promise(r=>cv.toBlob(r,'image/png'));
 function loadZip(){return window.JSZip?Promise.resolve():new Promise((ok,no)=>{const s=document.createElement('script');s.src='jszip.min.js';s.onload=ok;s.onerror=no;document.head.appendChild(s)})}
-document.getElementById('saveDays').onclick=async()=>{if(!curIdx.length)return;
-  const btn=document.getElementById('saveDays'),label=btn.textContent,folder=`SOXL_3m_${curFile}`,n=curIdx.length;
-  const prog=k=>btn.textContent=`저장 중… ${k}/${n}`;btn.disabled=true;
+const msg=document.getElementById('saveMsg'),btnF=document.getElementById('saveDays'),btnZ=document.getElementById('saveZip');
+if(!window.showDirectoryPicker)btnF.hidden=true; // 폴더 직접 저장은 크롬·엣지(PC)만 지원
+const say=(t,bad)=>{msg.textContent=t;msg.style.color=bad?'var(--up)':'var(--muted)'};
+const fname=x=>`SOXL_3m_${x.d}_${WDE[x.wd]}.png`;
+async function saveFolder(){if(!curIdx.length)return;const folder=`SOXL_3m_${curFile}`,n=curIdx.length;
+  let root;
+  try{root=await showDirectoryPicker({mode:'readwrite',id:'soxl',startIn:'pictures'})}
+  catch(e){say(e.name==='AbortError'
+      ?'폴더를 고르지 않았거나 브라우저가 막았습니다. 바탕화면·다운로드·문서 폴더 "자체"는 크롬이 막으니, 그 안에 새 폴더를 하나 만들어 그 폴더를 고르세요. 아니면 "ZIP으로 받기"를 누르세요.'
+      :'폴더 저장 실패('+e.name+'). "ZIP으로 받기"를 눌러 주세요.',true);return}
+  btnF.disabled=btnZ.disabled=true;
   try{
-    if(window.showDirectoryPicker){ // Chrome·Edge: 고른 위치에 폴더를 만들고 하루씩 PNG 저장
-      let root;try{root=await showDirectoryPicker({mode:'readwrite',id:'soxl'})}catch(e){return}
-      const dir=await root.getDirectoryHandle(folder,{create:true});
-      for(let k=0;k<n;k++){const x=dayInfo[curIdx[k]];prog(k+1);const blob=await toBlob(renderDay(x));
-        const fh=await dir.getFileHandle(`SOXL_3m_${x.d}_${WDE[x.wd]}.png`,{create:true});const w=await fh.createWritable();await w.write(blob);await w.close()}
-      btn.textContent=`완료: ${folder} 폴더에 ${n}장`;
-    }else{ // 그 밖의 브라우저: 폴더째 ZIP 한 개로
-      await loadZip();const zip=new JSZip(),f=zip.folder(folder);
-      for(let k=0;k<n;k++){const x=dayInfo[curIdx[k]];prog(k+1);f.file(`SOXL_3m_${x.d}_${WDE[x.wd]}.png`,await toBlob(renderDay(x)))}
-      btn.textContent='압축 중…';const z=await zip.generateAsync({type:'blob'});
-      const u=URL.createObjectURL(z),a=document.createElement('a');a.href=u;a.download=folder+'.zip';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),5000);
-      btn.textContent=`완료: ${folder}.zip (${n}장)`;
-    }
-  }catch(e){btn.textContent='저장 실패: '+e.message}
-  finally{btn.disabled=false;setTimeout(()=>btn.textContent=label,4000)}};
+    if(root.requestPermission&&(await root.requestPermission({mode:'readwrite'}))!=='granted'){say('폴더에 쓰기 권한을 허용하지 않아 저장하지 못했습니다. 다시 눌러 "변경사항 저장/허용"을 눌러 주세요.',true);return}
+    const dir=await root.getDirectoryHandle(folder,{create:true});
+    for(let k=0;k<n;k++){const x=dayInfo[curIdx[k]];say(`저장 중… ${k+1}/${n}`);const blob=await toBlob(renderDay(x));
+      const fh=await dir.getFileHandle(fname(x),{create:true});const w=await fh.createWritable();await w.write(blob);await w.close()}
+    say(`완료: 고른 폴더 안의 "${folder}" 폴더에 사진 ${n}장을 저장했습니다.`);
+  }catch(e){say('저장 실패('+e.name+': '+e.message+'). "ZIP으로 받기"를 눌러 주세요.',true)}
+  finally{btnF.disabled=btnZ.disabled=false}}
+async function saveZip(){if(!curIdx.length)return;const folder=`SOXL_3m_${curFile}`,n=curIdx.length;btnF.disabled=btnZ.disabled=true;
+  try{await loadZip();const zip=new JSZip(),f=zip.folder(folder);
+    for(let k=0;k<n;k++){const x=dayInfo[curIdx[k]];say(`사진 만드는 중… ${k+1}/${n}`);f.file(fname(x),await toBlob(renderDay(x)))}
+    say('압축 중…');const z=await zip.generateAsync({type:'blob'});
+    const u=URL.createObjectURL(z),a=document.createElement('a');a.href=u;a.download=folder+'.zip';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),10000);
+    say(`완료: ${folder}.zip 을 받았습니다 (다운로드 폴더). 압축을 풀면 "${folder}" 폴더 안에 사진 ${n}장이 있습니다.`);
+  }catch(e){say('ZIP 만들기 실패: '+e.message,true)}
+  finally{btnF.disabled=btnZ.disabled=false}}
+btnF.onclick=saveFolder;btnZ.onclick=saveZip;
 document.getElementById('saveGrid').onclick=()=>{if(!curIdx.length)return;
   const n=curIdx.length,first=cells[0].el.getBoundingClientRect();
   const cols=Math.max(1,getComputedStyle(grid).gridTemplateColumns.split(' ').length);
