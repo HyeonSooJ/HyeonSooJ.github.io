@@ -48,7 +48,7 @@ def extract(path, crop=None, colors=None):
     r, g, b = im[..., 0], im[..., 1], im[..., 2]
     mx, mn = im.max(2), im.min(2)
     sat = (mx - mn) > 50
-    red = sat & (r > g + 40) & (r > b + 30) & (g < 0.55 * r)  # 주황 제외
+    red = sat & (r > g + 40) & (r > b + 30) & (g < 0.55 * r) & (b - g < 45)  # 주황·분홍 제외
     grn = sat & (g > r + 30) & (g >= b - 10)
     blu = sat & (b > r + 40) & (b > g + 10) & (g > r) & ~grn  # 보라 제외
     if colors is None:
@@ -76,44 +76,84 @@ def extract(path, crop=None, colors=None):
     by0, by1 = max(bands, key=lambda b: (b[1] - b[0]) * 1.0 + col[b[0]:b[1] + 1].sum() * 1e-6)
     colm = col[by0:by1 + 1]
     cols = colm.sum(0)
-    # 캔들 = 색 픽셀이 있는 열의 연속 구간
-    runs, s = [], None
+    upm, dnm = up[by0:by1 + 1], dn[by0:by1 + 1]
+    colm2 = upm | dnm
+    cnt = colm2.sum(0).astype(float)
+    xs_on = np.where(cnt >= 2)[0]
+    if len(xs_on) == 0:
+        raise SystemExit('캔들을 찾지 못했습니다')
+    # 꼬리(가는 세로선) 위치 = 양옆보다 색 픽셀이 확 많은 열 → 캔들 중심
+    cand = []
+    for x in range(3, W - 3):
+        side = max(cnt[x - 3], cnt[x + 3])
+        if cnt[x] >= side + 4 and cnt[x] >= cnt[x - 1] and cnt[x] >= cnt[x + 1]:
+            cand.append(x)
+    centers = []
+    for x in cand:
+        if centers and x - centers[-1][-1] <= 3:
+            centers[-1].append(x)
+        else:
+            centers.append([x])
+    centers = [sum(c) / len(c) for c in centers]
+    pitch = None
+    if len(centers) >= 3:
+        d = np.diff(centers)
+        base = np.percentile(d, 25)
+        ests = [dd / max(1, round(dd / base)) for dd in d if dd > 2]
+        pitch = float(np.median(ests))
+    gr, s0 = [], None
     for x in range(W + 1):
-        on = x < W and cols[x] > 0
-        if on and s is None: s = x
-        if not on and s is not None:
-            runs.append((s, x - 1)); s = None
-    wmax = max(e - s + 1 for s, e in runs)
-    runs = [rr for rr in runs if (rr[1] - rr[0] + 1) >= max(2, wmax * 0.35)]
-    bgd = np.abs(im - bg).sum(2) > 45  # 배경과 다른 픽셀(회색 꼬리 포함)
+        on = x < W and cnt[x] > 0
+        if on and s0 is None: s0 = x
+        if not on and s0 is not None:
+            gr.append((s0, x - 1)); s0 = None
+    gw = [e - s + 1 for s, e in gr]
+    big = [w for w in gw if w >= max(2, max(gw) * 0.35)]
+    med = float(np.median(big)) if big else 0
+    gap_ok = len(big) >= 3 and all(0.7 * med <= w <= 1.3 * med for w in big) and len(big) >= len(centers) - 1
+    runs = []
+    if gap_ok:
+        pitch = None
+    if pitch and pitch > 4:
+        ph = np.median([(c % pitch) for c in centers[:]])
+        # 위상 평균(원형) 처리
+        ang = np.angle(np.mean(np.exp(2j * np.pi * np.array(centers) / pitch)))
+        ph = (ang / (2 * np.pi) * pitch) % pitch
+        k0 = int(np.floor((xs_on.min() - ph) / pitch))
+        k1 = int(np.ceil((xs_on.max() - ph) / pitch))
+        for k in range(k0, k1 + 1):
+            c = ph + k * pitch
+            x0, x1 = int(round(c - pitch * 0.45)), int(round(c + pitch * 0.45))
+            x0, x1 = max(0, x0), min(W - 1, x1)
+            if x1 - x0 < 2 or colm2[:, x0:x1 + 1].sum() < 3:
+                continue
+            # 화면 끝에서 절반 넘게 잘린 캔들은 뺌
+            if (c - pitch * 0.45 < -pitch * 0.25) or (c + pitch * 0.45 > W - 1 + pitch * 0.25):
+                continue
+            runs.append((x0, x1))
+    else:  # 캔들 사이에 빈 열이 있는 단순한 경우
+        runs = [rr for rr in gr if (rr[1] - rr[0] + 1) >= max(2, max(gw) * 0.35)]
+    bgd = np.abs(im - bg).sum(2) > 45
     out = []
     for x0, x1 in runs:
         w = x1 - x0 + 1
-        sub = colm[:, x0:x1 + 1]
+        cu = upm[:, x0:x1 + 1].sum(); cd = dnm[:, x0:x1 + 1].sum()
+        upc = cu >= cd
+        sub = (upm if upc else dnm)[:, x0:x1 + 1]
         widths = sub.sum(1)
-        body = np.where(widths >= max(1, 0.6 * w))[0]
+        body = np.where(widths >= max(1, 0.5 * w))[0]
         if len(body) == 0:
             continue
         top, bot = by0 + body.min(), by0 + body.max()
-        upc = up[by0:by1 + 1, x0:x1 + 1].sum() >= dn[by0:by1 + 1, x0:x1 + 1].sum()
+        cw = max(1, w // 3)
+        mid = (upm | dnm)[:, x0 + (w - cw) // 2: x0 + (w - cw) // 2 + cw]
+        rows_any = np.where(mid.any(1) | (widths >= max(1, 0.5 * w)))[0]
+        hi, lo = by0 + rows_any.min(), by0 + rows_any.max()
         cx = (x0 + x1) // 2
-        xs = [x for x in (cx - 1, cx, cx + 1) if 0 <= x < W]
-        okcol = {}
-        for x in xs:  # 세로 격자선 색은 꼬리로 치지 않기
-            colv = im[by0:by1 + 1, x]
-            q = colv // 8
-            v, k = np.unique(q, axis=0, return_counts=True)
-            m = v[k.argmax()] * 8 + 4
-            grid = k.max() > 0.6 * len(colv) and np.abs(m - bg).sum() > 20
-            okcol[x] = bgd[:, x] & (~(np.abs(im[:, x] - m).sum(1) < 30) if grid else True)
-        isw = lambda y: any(okcol[x][y] for x in xs)
-        hi = top
-        while hi - 1 >= max(0, by0 - 2) and isw(hi - 1):
-            hi -= 1
-        lo = bot
-        while lo + 1 < min(H, by1 + 3) and isw(lo + 1):
-            lo += 1
-        # 가격 = -y (위가 높음)
+        y = top
+        while y - 1 >= max(0, by0 - 2) and bgd[y - 1, cx] and not (upm | dnm)[min(max(y - 1 - by0, 0), by1 - by0), x0:x1 + 1].sum() > 0.5 * w:
+            y -= 1
+        hi = min(hi, y) if not upm[:, cx].any() and not dnm[:, cx].any() else hi
         o, c = (-bot, -top) if upc else (-top, -bot)
         out.append(dict(x0=x0, x1=x1, o=o, h=-hi, l=-lo, c=c, up=bool(upc)))
     return out, (by0, by1), colors, im
@@ -174,7 +214,7 @@ def hhmm(i):
     return f'{(m // 60) % 24:02d}:{m % 60:02d}'
 
 
-def render(qohlc, best, days, sym, out, others, start=0):
+def render(qohlc, best, days, sym, out, others, start=0, rank_no=1):
     import matplotlib, logging
     matplotlib.use('Agg')
     logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
@@ -189,6 +229,7 @@ def render(qohlc, best, days, sym, out, others, start=0):
     n = len(qohlc)
     wd = '월화수목금토일'[date.fromisoformat(d).weekday()]
     fig = plt.figure(figsize=(14, 8.6), dpi=110)
+    fig.suptitle(f'{rank_no}순위   {d} ({wd})', fontsize=20, fontweight='bold', y=0.995)
     gs = fig.add_gridspec(2, 2, height_ratios=[1, 1.55], width_ratios=[1, 1], hspace=0.32, wspace=0.12)
     # 1) 사진에서 읽은 모양
     ax1 = fig.add_subplot(gs[0, 0])
@@ -268,6 +309,8 @@ def main():
         cs = cs[a.skip:]
         if a.take:
             cs = cs[:a.take]
+        elif len(cs) > 10:  # 09:00~09:30 = 3분봉 10개. 더 많으면 마지막 10개
+            cs = cs[-10:]
         debug_overlay(im, cs, os.path.join(a.out, 'detected.png'))
         q = np.array([[c['o'], c['h'], c['l'], c['c']] for c in cs], float)
         print(f'캔들 {len(cs)}개 인식 (색 규칙 {colors}, 가격 영역 y={band})')
@@ -279,7 +322,7 @@ def main():
         print(f'  {d} ({"월화수목금토일"[date.fromisoformat(d).weekday()]})  {x:.3f}')
     for k in range(min(a.render, len(res))):
         out = os.path.join(a.out, f'{a.sym.upper()}_match{k+1}_{res[k][1]}.png')
-        render(q, res[k], days, a.sym, out, [r for r in res[:a.top] if r != res[k]][:4] if k == 0 else None, start)
+        render(q, res[k], days, a.sym, out, [r for r in res[:a.top] if r != res[k]][:4] if k == 0 else None, start, k + 1)
         print('그림:', out)
 
 
