@@ -41,3 +41,14 @@
 - soxl/download_soxl_3m.py : 사용자 PC에서 SOXL 3분봉을 엑셀로 받는 스크립트(작업 브랜치에만 있음)
 - 클라우드 환경 "Binance data (HyeonSooJ.github.io)": data.binance.vision, Yahoo 등 허용
 - 이전 프로젝트(코스피/코루 엑셀 분석)는 별도 — 그 노트는 사용자가 따로 가지고 있음
+
+## 비슷한 날 찾기 (2026-11-14 추가)
+- 사용자가 KORU 3분봉 09:00~09:30 사진을 채팅에 올리면 → 가장 비슷한 과거 날 차트 그림을 채팅에 올려주면 됨
+- 도구: tools/pattern/find_similar.py (필요: `pip install matplotlib`, numpy·Pillow)
+  - `python tools/pattern/find_similar.py 사진.png --out <스크래치패드>/결과` (SOXL은 `--sym soxl`)
+  - 결과: detected.png(사진에서 캔들을 어떻게 읽었는지 — 꼭 눈으로 확인), KORU_match1_<날짜>.png(보낼 그림)
+  - 캔들 인식이 틀리면 `--crop x0,y0,x1,y1`, `--skip N`, `--take 10`, `--colors gr|rb`로 조정
+  - 비교: 첫 n개 3분봉의 시·고·저·종을 (첫 시가 기준, 최고-최저 폭)으로 나눠 모양만 비교(RMS, 작을수록 비슷)
+  - 사진에는 오늘 데이터가 아직 없으니(사이트는 전날까지) 과거 날만 후보가 됨
+  - 시험: 사이트 화면 캡처 → 정확히 그 날(차이 0.002), 바이낸스풍 그림 → 그 날 1위
+- 먼저 `git pull`로 main 최신 데이터를 받아 두고 실행할 것
