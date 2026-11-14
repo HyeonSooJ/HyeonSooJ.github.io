@@ -250,7 +250,7 @@ def main():
     p.add_argument('--top', type=int, default=5)
     p.add_argument('--before')
     p.add_argument('--out', default='.')
-    p.add_argument('--render', type=int, default=1, help='그림으로 만들 상위 개수')
+    p.add_argument('--render', type=int, default=5, help='그림으로 만들 상위 개수')
     a = p.parse_args()
     crop = tuple(int(v) for v in a.crop.split(',')) if a.crop else None
     hh, mm = map(int, a.start.split(':'))

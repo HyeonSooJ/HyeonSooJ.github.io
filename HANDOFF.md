@@ -46,7 +46,9 @@
 - 사용자가 KORU 3분봉 09:00~09:30 사진을 채팅에 올리면 → 가장 비슷한 과거 날 차트 그림을 채팅에 올려주면 됨
 - 도구: tools/pattern/find_similar.py (필요: `pip install matplotlib`, numpy·Pillow)
   - `python tools/pattern/find_similar.py 사진.png --out <스크래치패드>/결과` (SOXL은 `--sym soxl`)
-  - 결과: detected.png(사진에서 캔들을 어떻게 읽었는지 — 꼭 눈으로 확인), KORU_match1_<날짜>.png(보낼 그림)
+  - 결과: detected.png(사진에서 캔들을 어떻게 읽었는지 — 꼭 눈으로 확인), KORU_match1~5_<날짜>.png
+  - 사용자 요청: 항상 1~5순위 그림 5장을 모두 채팅에 올릴 것(기본값 --render 5)
+  - 사진이 09:00~09:30이 아니면 첫 캔들 시각을 --start HH:MM 으로(같은 시간대끼리 비교). 사이트에 있는 날이면 day:YYYY-MM-DD --start --n 로 실제 데이터 사용
   - 캔들 인식이 틀리면 `--crop x0,y0,x1,y1`, `--skip N`, `--take 10`, `--colors gr|rb`로 조정
   - 비교: 첫 n개 3분봉의 시·고·저·종을 (첫 시가 기준, 최고-최저 폭)으로 나눠 모양만 비교(RMS, 작을수록 비슷)
   - 사진에는 오늘 데이터가 아직 없으니(사이트는 전날까지) 과거 날만 후보가 됨
