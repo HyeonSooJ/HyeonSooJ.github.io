@@ -23,7 +23,7 @@
   (1분봉을 묶어 3분봉을 만들면 바이낸스 3분봉과 114개 봉이 0.01~0.47 달라서 이렇게 함)
 
 ## 자동 갱신
-- .github/workflows/data-update.yml : UTC 08:37~20:37 2시간마다 + 수동 실행(Run workflow)
+- .github/workflows/data-update.yml : 매시 17분(UTC) + 수동 실행(Run workflow). 새 날짜 있을 때만 커밋
 - .github/scripts/update_data.py <폴더> <코인심볼> <ETF티커> [첫날] (표준 라이브러리만)
   - 예) python .github/scripts/update_data.py chart/data/soxl SOXLUSDT SOXL
   - 새 종목은 끝에 상장일을 주면 처음부터 생성
