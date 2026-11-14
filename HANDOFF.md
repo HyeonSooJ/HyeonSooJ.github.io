@@ -50,6 +50,7 @@
 - 도구: tools/pattern/find_similar.py (필요: `pip install matplotlib`, numpy·Pillow)
   - `python tools/pattern/find_similar.py 사진.png --out <스크래치패드>/결과` (SOXL은 `--sym soxl`)
   - 아래 큰 차트는 09:00~15:30만 표시(사용자 요청)
+  - 토·일 날짜는 후보에서 제외(사용자 요청)
   - 캔들 색은 바이낸스처럼 초록=양봉, 빨강=음봉(사용자 요청). 메인 차트 사이트(/chart/)도 같은 색
   - 결과: detected.png(사진에서 캔들을 어떻게 읽었는지 — 꼭 눈으로 확인), KORU_match1~5_<날짜>.png
   - 사용자 규칙(꼭 지킬 것):

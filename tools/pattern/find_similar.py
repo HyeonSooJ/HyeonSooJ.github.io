@@ -183,7 +183,7 @@ def rank(q, days, before=None, start=0, exclude=()):
     for d, a in days.items():
         if before and d >= before:
             continue
-        if d in exclude:
+        if d in exclude or date.fromisoformat(d).weekday() >= 5:  # 토·일 제외
             continue
         seg = a[start:start + n, :4]
         if np.isnan(seg).any():
