@@ -11,17 +11,17 @@
 /* Layout: 위 = 선택한 날(기본: 최신일) 큰 3분봉 차트 / 가운데 = 보기 버튼(전체·월별·요일별·날짜) / 아래 = 고른 날들의 미니 차트 격자 */
 :root{
   --bg:#f6f7f9; --panel:#ffffff; --fg:#14171c; --muted:#6a7280; --line:#e2e5ea; --chip:#eef0f3;
-  --up:#d6283a; --down:#1f5fd1; --sel:#14171c; --wick:#9aa1ad;
+  --up:#1fa874; --down:#e8384f; --sel:#14171c; --wick:#9aa1ad;
   --so:#b86e00; --sc:#7b3fd0; --sess:rgba(120,130,150,.09);
   --sans:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
   --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0f1216; --panel:#161a20; --fg:#e8ebf0; --muted:#8b93a1; --line:#262c35; --chip:#1f242c;
-  --up:#ff5468; --down:#4d8dff; --sel:#e8ebf0; --wick:#5c6470; --so:#f0a43a; --sc:#b98cff; --sess:rgba(160,170,190,.10); color-scheme:dark}}
+  --up:#2ebd85; --down:#f6465d; --sel:#e8ebf0; --wick:#5c6470; --so:#f0a43a; --sc:#b98cff; --sess:rgba(160,170,190,.10); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f1216; --panel:#161a20; --fg:#e8ebf0; --muted:#8b93a1; --line:#262c35; --chip:#1f242c;
-  --up:#ff5468; --down:#4d8dff; --sel:#e8ebf0; --wick:#5c6470; --so:#f0a43a; --sc:#b98cff; --sess:rgba(160,170,190,.10); color-scheme:dark}
+  --up:#2ebd85; --down:#f6465d; --sel:#e8ebf0; --wick:#5c6470; --so:#f0a43a; --sc:#b98cff; --sess:rgba(160,170,190,.10); color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
