@@ -10,16 +10,16 @@
 <style>
 :root{
   --bg:#f6f7f9; --panel:#ffffff; --fg:#14171c; --muted:#6a7280; --line:#e2e5ea; --chip:#eef0f3;
-  --up:#d6283a; --down:#1f5fd1; --wick:#9aa1ad; --hl:rgba(240,164,58,.22); --hlt:#b06a00; --sess:rgba(120,130,150,.10); --grid:#eceef2;
+  --up:#1fa874; --down:#e8384f; --wick:#9aa1ad; --hl:rgba(240,164,58,.22); --hlt:#b06a00; --sess:rgba(120,130,150,.10); --grid:#eceef2;
   --sans:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
   --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
 }
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
   --bg:#0f1216; --panel:#161a20; --fg:#e8ebf0; --muted:#8b93a1; --line:#262c35; --chip:#1f242c;
-  --up:#ff5468; --down:#4d8dff; --wick:#5c6470; --hl:rgba(240,164,58,.20); --hlt:#f0a43a; --sess:rgba(160,170,190,.10); --grid:#1f242c; color-scheme:dark}}
+  --up:#2ebd85; --down:#f6465d; --wick:#5c6470; --hl:rgba(240,164,58,.20); --hlt:#f0a43a; --sess:rgba(160,170,190,.10); --grid:#1f242c; color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f1216; --panel:#161a20; --fg:#e8ebf0; --muted:#8b93a1; --line:#262c35; --chip:#1f242c;
-  --up:#ff5468; --down:#4d8dff; --wick:#5c6470; --hl:rgba(240,164,58,.20); --hlt:#f0a43a; --sess:rgba(160,170,190,.10); --grid:#1f242c; color-scheme:dark}
+  --up:#2ebd85; --down:#f6465d; --wick:#5c6470; --hl:rgba(240,164,58,.20); --hlt:#f0a43a; --sess:rgba(160,170,190,.10); --grid:#1f242c; color-scheme:dark}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
@@ -93,7 +93,7 @@ canvas{display:block;width:100%}
 <div class="note">
 비교 방법: 사진 속 캔들 중 마지막 10개(= 09:00~09:27 시작 3분봉 10개)의 시가·고가·저가·종가를 첫 시가 기준, 최고~최저 폭으로 맞춰 <b>모양만</b> 남기고,
 과거 각 날의 09:00~09:30 바이낸스 3분봉 10개와 차이(작을수록 비슷)를 계산해 1~5순위를 보여줍니다. 사진에 가격 눈금이 없어도 됩니다.
-초록·빨강(바이낸스) 또는 빨강·파랑(국내) 캔들 색을 자동으로 구분합니다. 아래 큰 차트는 그 날 09:00 ~ 15:30(한국시간)만 보여줍니다.
+캔들 색은 바이낸스처럼 <b>초록 = 양봉(상승), 빨강 = 음봉(하락)</b>으로 읽고 그립니다(사진이 빨강·파랑 국내식이면 빨강 = 양봉으로 자동 판단). 아래 큰 차트는 그 날 09:00 ~ 15:30(한국시간)만 보여줍니다.
 데이터: <a href="../">분봉 차트</a>와 같은 바이낸스 공식 아카이브(매일 자동 갱신, 전날까지). 사진은 이 브라우저 안에서만 처리되고 어디에도 올라가지 않습니다.
 </div>
 

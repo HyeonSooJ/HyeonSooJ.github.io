@@ -198,7 +198,7 @@ def rank(q, days, before=None, start=0, exclude=()):
 
 
 # ---------- 그림 ----------
-def draw_candles(ax, a, x0=0, up='#d6283a', dn='#1f5fd1', wick='#8a919c', width=0.62):
+def draw_candles(ax, a, x0=0, up='#1fa874', dn='#e8384f', wick='#8a919c', width=0.62):
     for i, (o, h, l, c) in enumerate(a[:, :4]):
         if np.isnan(o):
             continue
