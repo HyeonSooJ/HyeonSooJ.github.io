@@ -136,14 +136,16 @@ def norm(ohlc):
     return (a[:, :4] - a[0, 0]) / (rng if rng > 0 else 1)
 
 
-def rank(q, days, before=None):
+def rank(q, days, before=None, start=0, exclude=()):
     qn = norm(q)
     n = len(q)
     res = []
     for d, a in days.items():
         if before and d >= before:
             continue
-        seg = a[:n, :4]
+        if d in exclude:
+            continue
+        seg = a[start:start + n, :4]
         if np.isnan(seg).any():
             continue
         cn = norm(seg)
@@ -164,7 +166,7 @@ def draw_candles(ax, a, x0=0, up='#d6283a', dn='#1f5fd1', wick='#8a919c', width=
         colr = up if c >= o else dn
         ax.vlines(x, l, h, color=wick if len(a) > 60 else colr, lw=0.6 if len(a) > 60 else 1.0, zorder=1)
         ax.add_patch(__import__('matplotlib').patches.Rectangle(
-            (x - width / 2, min(o, c)), width, max(abs(c - o), 1e-9), color=colr, lw=0, zorder=2))
+            (x - width / 2, min(o, c)), width, max(abs(c - o), (np.nanmax(a[:, 1]) - np.nanmin(a[:, 2])) * 0.012), color=colr, lw=0, zorder=2))
 
 
 def hhmm(i):
@@ -172,7 +174,7 @@ def hhmm(i):
     return f'{(m // 60) % 24:02d}:{m % 60:02d}'
 
 
-def render(qohlc, best, days, sym, out, others):
+def render(qohlc, best, days, sym, out, others, start=0):
     import matplotlib, logging
     matplotlib.use('Agg')
     logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
@@ -193,20 +195,27 @@ def render(qohlc, best, days, sym, out, others):
     qn = norm(qohlc)
     draw_candles(ax1, np.c_[qn, np.zeros(n)])
     ax1.set_title(f'보내준 사진 (캔들 {n}개, 모양만)', fontsize=12)
-    ax1.set_yticks([]); ax1.set_xticks(range(n)); ax1.set_xticklabels([hhmm(i) for i in range(n)], fontsize=7, rotation=45)
+    ax1.set_yticks([]); ax1.set_xticks(range(n)); ax1.set_xticklabels([hhmm(start + i) for i in range(n)], fontsize=7, rotation=45)
     ax1.set_xlim(-0.8, n - 0.2)
     # 2) 찾은 날 09:00~
     ax2 = fig.add_subplot(gs[0, 1])
-    seg = a[:n]
+    seg = a[start:start + n]
     draw_candles(ax2, seg)
     chg = (seg[-1, 3] / seg[0, 0] - 1) * 100
-    ax2.set_title(f'{d} ({wd}) 09:00~{hhmm(n)}  |  {seg[0,0]:.2f}→{seg[-1,3]:.2f} ({chg:+.2f}%)  차이 {dist:.3f}', fontsize=12)
-    ax2.set_xticks(range(n)); ax2.set_xticklabels([hhmm(i) for i in range(n)], fontsize=7, rotation=45)
+    ax2.set_title(f'{d} ({wd}) {hhmm(start)}~{hhmm(start + n)}  |  {seg[0,0]:.2f}→{seg[-1,3]:.2f} ({chg:+.2f}%)  차이 {dist:.3f}', fontsize=12)
+    ax2.set_xticks(range(n)); ax2.set_xticklabels([hhmm(start + i) for i in range(n)], fontsize=7, rotation=45)
     ax2.set_xlim(-0.8, n - 0.2); ax2.tick_params(axis='y', labelsize=8); ax2.grid(alpha=.25)
     # 3) 그 날 하루 전체
     ax3 = fig.add_subplot(gs[1, :])
-    ax3.axvspan(-0.5, n - 0.5, color='#f0a43a', alpha=0.18, lw=0)
-    ax3.axvspan(290, 420, color='#a0aabe', alpha=0.12, lw=0)
+    ax3.axvspan(start - 0.5, start + n - 0.5, color='#f0a43a', alpha=0.18, lw=0)
+    us = (290, 420)
+    try:
+        t = open(os.path.join(ROOT, 'chart/data', sym, 'stock.js')).read()
+        st = json.loads(t[t.index('=') + 1:].strip().rstrip(';'))
+        if d in st: us = (st[d][2], st[d][3])
+    except Exception:
+        pass
+    ax3.axvspan(us[0], us[1], color='#a0aabe', alpha=0.12, lw=0)
     draw_candles(ax3, a)
     o0 = a[0, 0]
     lo, hi = np.nanmin(a[:, 2]), np.nanmax(a[:, 1])
@@ -218,8 +227,8 @@ def render(qohlc, best, days, sym, out, others):
     ticks = list(range(0, 481, 20))
     ax3.set_xticks(ticks); ax3.set_xticklabels([hhmm(i) for i in ticks], fontsize=8, rotation=45)
     ax3.set_xlim(-3, 483); ax3.grid(alpha=.25); ax3.tick_params(axis='y', labelsize=8)
-    ax3.text(n + 2, 0.98, '◀ 비교 구간', transform=ax3.get_xaxis_transform(), ha='left', va='top', fontsize=9, color='#b06a00')
-    ax3.text(355, 0.98, '미국 정규장', transform=ax3.get_xaxis_transform(), ha='center', va='top', fontsize=9, color='#666')
+    ax3.text(start + n + 2, 0.98, '◀ 비교 구간', transform=ax3.get_xaxis_transform(), ha='left', va='top', fontsize=9, color='#b06a00')
+    ax3.text((us[0] + us[1]) / 2, 0.98, '미국 정규장', transform=ax3.get_xaxis_transform(), ha='center', va='top', fontsize=9, color='#666')
     if others:
         fig.text(0.5, 0.005, '다음으로 비슷한 날: ' + ',  '.join(f'{dd}({"월화수목금토일"[date.fromisoformat(dd).weekday()]}) {x:.3f}' for x, dd in others),
                  ha='center', fontsize=10)
@@ -229,7 +238,10 @@ def render(qohlc, best, days, sym, out, others):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('image')
+    p.add_argument('image', help='사진 경로, 또는 day:YYYY-MM-DD (그 날 데이터를 그대로 질문으로 사용)')
+    p.add_argument('--start', default='09:00', help='사진 첫 캔들 시각(한국시간)')
+    p.add_argument('--n', type=int, help='day: 질문일 때 캔들 개수')
+    p.add_argument('--exclude', default='', help='뺄 날짜들, 쉼표로')
     p.add_argument('--sym', default='koru')
     p.add_argument('--crop')
     p.add_argument('--skip', type=int, default=0)
@@ -241,24 +253,33 @@ def main():
     p.add_argument('--render', type=int, default=1, help='그림으로 만들 상위 개수')
     a = p.parse_args()
     crop = tuple(int(v) for v in a.crop.split(',')) if a.crop else None
-    cs, band, colors, im = extract(a.image, crop, a.colors)
-    cs = cs[a.skip:]
-    if a.take:
-        cs = cs[:a.take]
+    hh, mm = map(int, a.start.split(':'))
+    start = (((hh * 60 + mm) - 540) % 1440) // 3
     os.makedirs(a.out, exist_ok=True)
-    debug_overlay(im, cs, os.path.join(a.out, 'detected.png'))
-    q = np.array([[c['o'], c['h'], c['l'], c['c']] for c in cs], float)
-    print(f'캔들 {len(cs)}개 인식 (색 규칙 {colors}, 가격 영역 y={band})')
-    for i, c in enumerate(cs):
-        print(f'  {i+1:2d} {hhmm(i)} {"상승" if c["up"] else "하락"}  o{c["o"]} h{c["h"]} l{c["l"]} c{c["c"]}')
     days = load_days(a.sym)
-    res = rank(q, days, a.before)
+    exclude = set(x for x in a.exclude.split(',') if x)
+    if a.image.startswith('day:'):
+        qd = a.image[4:]
+        q = days[qd][start:start + (a.n or 10), :4]
+        exclude.add(qd)
+        print(f'질문: {qd} {a.start}부터 {len(q)}개 (데이터 그대로)')
+    else:
+        cs, band, colors, im = extract(a.image, crop, a.colors)
+        cs = cs[a.skip:]
+        if a.take:
+            cs = cs[:a.take]
+        debug_overlay(im, cs, os.path.join(a.out, 'detected.png'))
+        q = np.array([[c['o'], c['h'], c['l'], c['c']] for c in cs], float)
+        print(f'캔들 {len(cs)}개 인식 (색 규칙 {colors}, 가격 영역 y={band})')
+        for i, c in enumerate(cs):
+            print(f'  {i+1:2d} {hhmm(start + i)} {"상승" if c["up"] else "하락"}  o{c["o"]} h{c["h"]} l{c["l"]} c{c["c"]}')
+    res = rank(q, days, a.before, start, exclude)
     print('비슷한 날 (차이 작을수록 비슷):')
     for x, d in res[:a.top]:
         print(f'  {d} ({"월화수목금토일"[date.fromisoformat(d).weekday()]})  {x:.3f}')
     for k in range(min(a.render, len(res))):
         out = os.path.join(a.out, f'{a.sym.upper()}_match{k+1}_{res[k][1]}.png')
-        render(q, res[k], days, a.sym, out, [r for r in res[:a.top] if r != res[k]][:4] if k == 0 else None)
+        render(q, res[k], days, a.sym, out, [r for r in res[:a.top] if r != res[k]][:4] if k == 0 else None, start)
         print('그림:', out)
 
 
