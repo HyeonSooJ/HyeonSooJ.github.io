@@ -1,20 +1,20 @@
 # -*- coding: utf-8 -*-
 """
-종목 사이트(soxl/, koru/ …) 데이터 자동 갱신 (GitHub Actions에서 매일 실행, 표준 라이브러리만 사용)
+차트 사이트(chart/data/<종목>/) 데이터 자동 갱신 (GitHub Actions에서 매일 실행, 표준 라이브러리만 사용)
 
 - 바이낸스 공식 아카이브(data.binance.vision)에서 코인 선물 1분·3분·5분봉 하루치 파일을
   사이트에 아직 없는 날부터 '어제(UTC)'까지 받아 data.js / m1/*.json / m5/*.json 에 추가
 - Yahoo Finance에서 같은 이름의 ETF 일봉을 받아 stock.js(정규장 시가·종가) 갱신
 - 아카이브에 아직 안 올라온 날은 건너뛰고 다음 실행 때 다시 시도
 사용: python update_data.py <폴더> <코인심볼> <ETF티커> [첫날]
-  예) python .github/scripts/update_data.py soxl SOXLUSDT SOXL
-      python .github/scripts/update_data.py koru KORUUSDT KORU 2026-06-22   ← 처음 만들 때는 첫날(상장일)을 줌
+  예) python .github/scripts/update_data.py chart/data/soxl SOXLUSDT SOXL
+      python .github/scripts/update_data.py chart/data/koru KORUUSDT KORU 2026-06-22   ← 처음 만들 때는 첫날(상장일)을 줌
 """
 import csv, io, json, os, sys, time, zipfile, datetime as dt
 import urllib.request, urllib.error
 from zoneinfo import ZoneInfo
 
-ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "soxl")
+ROOT = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else "chart/data/soxl")
 SYMBOL = sys.argv[2] if len(sys.argv) > 2 else "SOXLUSDT"
 TICKER = sys.argv[3] if len(sys.argv) > 3 else "SOXL"
 FIRST = sys.argv[4] if len(sys.argv) > 4 else None

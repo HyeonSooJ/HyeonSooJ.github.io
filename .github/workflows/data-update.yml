@@ -1,4 +1,4 @@
-# 종목 사이트(soxl/, koru/) 데이터를 매일 자동으로 갱신합니다.
+# 차트 사이트(chart/) 데이터를 매일 자동으로 갱신합니다.
 # 바이낸스 아카이브는 다음 날 08:00~13:00(UTC)쯤 올라오므로 그 무렵 2시간마다 확인하고,
 # 새 날짜가 있을 때만 커밋합니다. Actions 탭에서 "Run workflow"로 바로 실행할 수도 있습니다.
 name: SOXL KORU data update
@@ -29,20 +29,20 @@ jobs:
 
       - name: Fetch new candles and stock prices
         run: |
-          python .github/scripts/update_data.py soxl SOXLUSDT SOXL
-          python .github/scripts/update_data.py koru KORUUSDT KORU
+          python .github/scripts/update_data.py chart/data/soxl SOXLUSDT SOXL
+          python .github/scripts/update_data.py chart/data/koru KORUUSDT KORU
 
       - name: Commit and push if changed
         id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add soxl/data.js soxl/stock.js soxl/m1 soxl/m5 koru/data.js koru/stock.js koru/m1 koru/m5
+          git add chart/data
           if git diff --cached --quiet; then
             echo "새 데이터 없음"
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
-            LAST=$(python -c "import json;s=open('soxl/data.js').read();print(json.loads(s[s.index('=')+1:].rstrip(';'))[-1][0])")
+            LAST=$(python -c "import json;s=open('chart/data/soxl/data.js').read();print(json.loads(s[s.index('=')+1:].rstrip(';'))[-1][0])")
             git commit -m "SOXL/KORU data update through ${LAST}"
             git push
             echo "changed=true" >> "$GITHUB_OUTPUT"
