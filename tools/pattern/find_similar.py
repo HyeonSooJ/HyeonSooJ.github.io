@@ -246,30 +246,23 @@ def render(qohlc, best, days, sym, out, others, start=0, rank_no=1):
     ax2.set_title(f'{d} ({wd}) {hhmm(start)}~{hhmm(start + n)}  |  {seg[0,0]:.2f}→{seg[-1,3]:.2f} ({chg:+.2f}%)  차이 {dist:.3f}', fontsize=12)
     ax2.set_xticks(range(n)); ax2.set_xticklabels([hhmm(start + i) for i in range(n)], fontsize=7, rotation=45)
     ax2.set_xlim(-0.8, n - 0.2); ax2.tick_params(axis='y', labelsize=8); ax2.grid(alpha=.25)
-    # 3) 그 날 하루 전체
+    # 3) 그 날 09:00~15:30
     ax3 = fig.add_subplot(gs[1, :])
+    SPAN = 130
+    w = a[:SPAN]
     ax3.axvspan(start - 0.5, start + n - 0.5, color='#f0a43a', alpha=0.18, lw=0)
-    us = (290, 420)
-    try:
-        t = open(os.path.join(ROOT, 'chart/data', sym, 'stock.js')).read()
-        st = json.loads(t[t.index('=') + 1:].strip().rstrip(';'))
-        if d in st: us = (st[d][2], st[d][3])
-    except Exception:
-        pass
-    ax3.axvspan(us[0], us[1], color='#a0aabe', alpha=0.12, lw=0)
-    draw_candles(ax3, a)
-    o0 = a[0, 0]
-    lo, hi = np.nanmin(a[:, 2]), np.nanmax(a[:, 1])
-    endc = a[~np.isnan(a[:, 3])][-1, 3]
+    draw_candles(ax3, w)
+    o0 = w[0, 0]
+    lo, hi = np.nanmin(w[:, 2]), np.nanmax(w[:, 1])
+    endc = w[~np.isnan(w[:, 3])][-1, 3]
     ax3.axhline(o0, color='#888', lw=0.7, ls=':')
-    ax3.set_title(f'{sym.upper()} {d} ({wd}) 하루 전체 3분봉  09:00 → 다음날 09:00   '
+    ax3.set_title(f'{sym.upper()} {d} ({wd}) 09:00 ~ 15:30 3분봉   '
                   f'시가 {o0:.2f}  고가 {hi:.2f}({(hi/o0-1)*100:+.1f}%)  저가 {lo:.2f}({(lo/o0-1)*100:+.1f}%)  '
-                  f'마감 {endc:.2f}({(endc/o0-1)*100:+.1f}%)', fontsize=11.5)
-    ticks = list(range(0, 481, 20))
-    ax3.set_xticks(ticks); ax3.set_xticklabels([hhmm(i) for i in ticks], fontsize=8, rotation=45)
-    ax3.set_xlim(-3, 483); ax3.grid(alpha=.25); ax3.tick_params(axis='y', labelsize=8)
-    ax3.text(start + n + 2, 0.98, '◀ 비교 구간', transform=ax3.get_xaxis_transform(), ha='left', va='top', fontsize=9, color='#b06a00')
-    ax3.text((us[0] + us[1]) / 2, 0.98, '미국 정규장', transform=ax3.get_xaxis_transform(), ha='center', va='top', fontsize=9, color='#666')
+                  f'15:30 {endc:.2f}({(endc/o0-1)*100:+.1f}%)', fontsize=11.5)
+    ticks = list(range(0, SPAN + 1, 10))
+    ax3.set_xticks(ticks); ax3.set_xticklabels([hhmm(i) for i in ticks], fontsize=8)
+    ax3.set_xlim(-1.5, SPAN + 0.5); ax3.grid(alpha=.25); ax3.tick_params(axis='y', labelsize=8)
+    ax3.text(start + n + 1, 0.98, '◀ 비교 구간', transform=ax3.get_xaxis_transform(), ha='left', va='top', fontsize=9, color='#b06a00')
     if others:
         fig.text(0.5, 0.005, '다음으로 비슷한 날: ' + ',  '.join(f'{dd}({"월화수목금토일"[date.fromisoformat(dd).weekday()]}) {x:.3f}' for x, dd in others),
                  ha='center', fontsize=10)
