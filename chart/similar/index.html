@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="09:00~09:30 3분봉 사진을 올리면 모양이 가장 비슷한 과거 5일을 찾아 보여줍니다">
+<title>비슷한 날 찾기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+:root{
+  --bg:#f6f7f9; --panel:#ffffff; --fg:#14171c; --muted:#6a7280; --line:#e2e5ea; --chip:#eef0f3;
+  --up:#d6283a; --down:#1f5fd1; --wick:#9aa1ad; --hl:rgba(240,164,58,.22); --hlt:#b06a00; --sess:rgba(120,130,150,.10); --grid:#eceef2;
+  --sans:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1216; --panel:#161a20; --fg:#e8ebf0; --muted:#8b93a1; --line:#262c35; --chip:#1f242c;
+  --up:#ff5468; --down:#4d8dff; --wick:#5c6470; --hl:rgba(240,164,58,.20); --hlt:#f0a43a; --sess:rgba(160,170,190,.10); --grid:#1f242c; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1216; --panel:#161a20; --fg:#e8ebf0; --muted:#8b93a1; --line:#262c35; --chip:#1f242c;
+  --up:#ff5468; --down:#4d8dff; --wick:#5c6470; --hl:rgba(240,164,58,.20); --hlt:#f0a43a; --sess:rgba(160,170,190,.10); --grid:#1f242c; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:14px 28px;display:flex;flex-direction:column;gap:12px;max-width:1100px;margin-inline:auto}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px}
+h1{font-size:18px;margin:0;font-weight:700}
+.sub{color:var(--muted);font-size:12px}
+.symnav{display:flex;gap:6px;margin-left:auto}
+.symnav a{font-size:13px;font-weight:600;color:var(--fg);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:3px 12px}
+.symnav a.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;min-width:0}
+#drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;
+  border:2px dashed var(--line);border-radius:8px;padding:22px 12px;cursor:pointer}
+#drop.over{border-color:var(--fg)}
+#drop b{font-size:16px}
+.btn{font:inherit;font-size:14px;font-weight:600;color:var(--bg);background:var(--fg);border:0;border-radius:8px;padding:10px 18px;cursor:pointer}
+.btn2{font:inherit;font-size:13px;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 11px;cursor:pointer}
+#status{font-size:13px;color:var(--muted);min-height:1.2em}
+#status.err{color:var(--up)}
+.qrow{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+@media (max-width:640px){.qrow{grid-template-columns:1fr}}
+.qrow h3,.card h3{margin:0 0 6px;font-size:13px;font-weight:600;color:var(--muted)}
+#ov{width:100%;max-height:420px;object-fit:contain;touch-action:none;cursor:crosshair;border-radius:6px;display:block;background:var(--chip)}
+canvas{display:block;width:100%}
+.card{display:flex;flex-direction:column;gap:8px}
+.card .rk{font-size:20px;font-weight:700;font-family:var(--sans)}
+.card .rk span{font-family:var(--mono)}
+.card .kv{font-family:var(--mono);font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,2.4fr);gap:10px}
+@media (max-width:640px){.two{grid-template-columns:1fr}}
+.note{font-size:11px;color:var(--muted);line-height:1.6}
+.note a,.sub a{color:inherit}
+#results{display:flex;flex-direction:column;gap:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>비슷한 날 찾기</h1>
+  <span class="sub" id="range">데이터 불러오는 중…</span>
+  <nav class="symnav" id="symNav" aria-label="종목"></nav>
+</header>
+
+<section class="panel">
+  <label id="drop" for="file">
+    <b>09:00~09:30 3분봉 차트 사진 올리기</b>
+    <span class="sub">눌러서 사진 고르기 · 끌어다 놓기 · 붙여넣기(Ctrl+V)</span>
+    <span class="btn">사진 고르기</span>
+  </label>
+  <input type="file" id="file" accept="image/*" hidden>
+  <div id="status" role="status" style="margin-top:8px"></div>
+</section>
+
+<section class="panel" id="qSec" hidden>
+  <div class="qrow">
+    <div>
+      <h3>사진에서 읽은 캔들 (주황 상자) — 틀리면 차트 부분만 손가락/마우스로 끌어서 선택</h3>
+      <canvas id="ov"></canvas>
+      <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+        <button class="btn2" id="resetCrop" type="button" hidden>선택 지우기</button>
+      </div>
+    </div>
+    <div>
+      <h3 id="qTitle">비교에 쓴 모양</h3>
+      <canvas id="qc" style="aspect-ratio:16/9"></canvas>
+    </div>
+  </div>
+</section>
+
+<section id="results"></section>
+
+<div class="note">
+비교 방법: 사진 속 캔들 중 마지막 10개(= 09:00~09:27 시작 3분봉 10개)의 시가·고가·저가·종가를 첫 시가 기준, 최고~최저 폭으로 맞춰 <b>모양만</b> 남기고,
+과거 각 날의 09:00~09:30 바이낸스 3분봉 10개와 차이(작을수록 비슷)를 계산해 1~5순위를 보여줍니다. 사진에 가격 눈금이 없어도 됩니다.
+초록·빨강(바이낸스) 또는 빨강·파랑(국내) 캔들 색을 자동으로 구분합니다. 하루 = 한국시간 09:00 ~ 익일 09:00, 회색 = 미국 정규장.
+데이터: <a href="../">분봉 차트</a>와 같은 바이낸스 공식 아카이브(매일 자동 갱신, 전날까지). 사진은 이 브라우저 안에서만 처리되고 어디에도 올라가지 않습니다.
+</div>
+
+<script>
+const SITES={koru:'KORUUSDT',soxl:'SOXLUSDT'};
+const SYM=(()=>{const h=location.hash.slice(1).toLowerCase();return SITES[h]?h:'koru'})();
+if(location.hash.slice(1)!==SYM)history.replaceState(null,'','#'+SYM);
+addEventListener('hashchange',()=>location.reload());
+const nav=document.getElementById('symNav');
+for(const k in SITES){const a=document.createElement('a');a.href='#'+k;a.textContent=k.toUpperCase();if(k===SYM)a.className='on';nav.appendChild(a)}
+const N=10, WD=['일','월','화','수','목','금','토'];
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const $=id=>document.getElementById(id);
+const pad2=n=>String(n).padStart(2,'0');
+const clock=i=>{const m=(540+3*i)%1440;return pad2(Math.floor(m/60))+':'+pad2(m%60)};
+const wdOf=d=>{const [y,m,dd]=d.split('-').map(Number);return WD[new Date(Date.UTC(y,m-1,dd)).getUTCDay()]};
+const parseJs=t=>JSON.parse(t.slice(t.indexOf('=',t.indexOf('const '))+1).trim().replace(/;$/,''));
+const status=(t,err)=>{const s=$('status');s.textContent=t;s.className=err?'err':''};
+
+let DAYS=null,STOCK={};
+Promise.all(['data.js','stock.js'].map(f=>fetch('../data/'+SYM+'/'+f).then(r=>{if(!r.ok)throw new Error(f+' '+r.status);return r.text()})))
+ .then(([a,b])=>{
+   DAYS=parseJs(a).map(([d,st,flat])=>{const bars=new Array(480).fill(null),n=flat.length/5;
+     for(let i=0;i<n&&st+i<480;i++){const k=i*5;bars[st+i]=[flat[k]/100,flat[k+1]/100,flat[k+2]/100,flat[k+3]/100]}return {d,bars}});
+   STOCK=parseJs(b);
+   $('range').textContent=SITES[SYM]+' · '+DAYS[0].d+' ~ '+DAYS[DAYS.length-1].d+' ('+DAYS.length+'일)';
+   if(pending)run();
+ }).catch(e=>{$('range').textContent='데이터를 불러오지 못했습니다: '+e.message});
+
+/* ---------- 사진 받기 ---------- */
+let IMG=null,CROP=null,pending=false;
+$('file').addEventListener('change',e=>{if(e.target.files[0])load(e.target.files[0]);e.target.value=''});
+const drop=$('drop');
+['dragenter','dragover'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(t=>drop.addEventListener(t,e=>{e.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',e=>{const f=[...e.dataTransfer.files].find(f=>f.type.startsWith('image/'));if(f)load(f)});
+addEventListener('paste',e=>{const it=[...(e.clipboardData||{}).items||[]].find(i=>i.type.startsWith('image/'));if(it)load(it.getAsFile())});
+function load(file){
+  status('사진 읽는 중…');
+  const url=URL.createObjectURL(file),im=new Image();
+  im.onload=()=>{
+    const s=Math.min(1,1600/Math.max(im.width,im.height));  // 너무 큰 사진은 줄여서 처리
+    const c=document.createElement('canvas');c.width=Math.round(im.width*s);c.height=Math.round(im.height*s);
+    c.getContext('2d').drawImage(im,0,0,c.width,c.height);URL.revokeObjectURL(url);
+    IMG={w:c.width,h:c.height,data:c.getContext('2d').getImageData(0,0,c.width,c.height).data,canvas:c};CROP=null;
+    if(DAYS)run();else{pending=true;status('데이터를 기다리는 중…')}
+  };
+  im.onerror=()=>status('사진을 열 수 없습니다',true);
+  im.src=url;
+}
+
+/* ---------- 사진에서 캔들 읽기 ---------- */
+function extract(img,crop){
+  const X0=crop?crop[0]:0,Y0=crop?crop[1]:0,W=crop?crop[2]-crop[0]:img.w,H=crop?crop[3]-crop[1]:img.h,D=img.data,IW=img.w;
+  const px=(x,y)=>{const k=((Y0+y)*IW+X0+x)*4;return [D[k],D[k+1],D[k+2]]};
+  const up=new Uint8Array(W*H),dn=new Uint8Array(W*H);let gs=0,bs=0;
+  const R=new Uint8Array(W*H),G=new Uint8Array(W*H),B=new Uint8Array(W*H);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){const [r,g,b]=px(x,y),i=y*W+x,mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+    if(mx-mn<=50)continue;
+    if(r>g+40&&r>b+30&&g<0.55*r&&b-g<45)R[i]=1;
+    else if(g>r+30&&g>=b-10){G[i]=1;gs++}
+    else if(b>r+40&&b>g+10&&g>r){B[i]=1;bs++}}
+  const scheme=gs>bs?'gr':'rb';
+  for(let i=0;i<W*H;i++){if(scheme==='gr'){up[i]=G[i];dn[i]=R[i]}else{up[i]=R[i];dn[i]=B[i]}}
+  // 가격 영역: 색 픽셀이 있는 행을 띠로 나눠 가장 키 큰 띠
+  const rowOn=new Uint8Array(H);for(let y=0;y<H;y++){for(let x=0;x<W;x++){const i=y*W+x;if(up[i]||dn[i]){rowOn[y]=1;break}}}
+  const bands=[];let s=-1,e=-1,gap=0;const GAP=Math.max(8,Math.floor(H/40));
+  for(let y=0;y<=H;y++){if(y<H&&rowOn[y]){if(s<0)s=y;gap=0;e=y}else if(s>=0){gap++;if(gap>GAP||y===H){bands.push([s,e]);s=-1}}}
+  if(!bands.length)return {err:'사진에서 초록·빨강(또는 빨강·파랑) 캔들을 찾지 못했습니다'};
+  const [by0,by1]=bands.reduce((a,b)=>(b[1]-b[0]>a[1]-a[0]?b:a));
+  const BH=by1-by0+1,U=(x,y)=>up[(by0+y)*W+x],Dn=(x,y)=>dn[(by0+y)*W+x],C=(x,y)=>U(x,y)||Dn(x,y);
+  const cnt=new Float64Array(W);for(let x=0;x<W;x++){let c=0;for(let y=0;y<BH;y++)if(C(x,y))c++;cnt[x]=c}
+  // 꼬리(가는 세로선) = 캔들 중심 후보
+  const cand=[];for(let x=3;x<W-3;x++){const side=Math.max(cnt[x-3],cnt[x+3]);if(cnt[x]>=side+4&&cnt[x]>=cnt[x-1]&&cnt[x]>=cnt[x+1])cand.push(x)}
+  const cg=[];for(const x of cand){if(cg.length&&x-cg[cg.length-1].at(-1)<=3)cg[cg.length-1].push(x);else cg.push([x])}
+  const centers=cg.map(c=>c.reduce((a,b)=>a+b,0)/c.length);
+  const med=a=>{const b=[...a].sort((p,q)=>p-q);return b.length?b[Math.floor(b.length/2)]:0};
+  let pitch=null;
+  if(centers.length>=3){const d=[];for(let i=1;i<centers.length;i++)d.push(centers[i]-centers[i-1]);
+    const ds=[...d].sort((a,b)=>a-b),base=ds[Math.floor((ds.length-1)*0.25)];
+    pitch=med(d.filter(v=>v>2).map(v=>v/Math.max(1,Math.round(v/base))))}
+  // 빈 열로 나뉜 구간
+  const gr=[];s=-1;for(let x=0;x<=W;x++){const on=x<W&&cnt[x]>0;if(on&&s<0)s=x;if(!on&&s>=0){gr.push([s,x-1]);s=-1}}
+  const gw=gr.map(([a,b])=>b-a+1),gmax=Math.max(...gw,0),big=gw.filter(w=>w>=Math.max(2,gmax*0.35)),bm=med(big);
+  const gapOk=big.length>=3&&big.every(w=>w>=0.7*bm&&w<=1.3*bm)&&big.length>=centers.length-1;
+  let runs=[];
+  if(!gapOk&&pitch&&pitch>4){
+    let sx=0,sy=0;for(const c of centers){const a=2*Math.PI*c/pitch;sx+=Math.cos(a);sy+=Math.sin(a)}
+    const ph=((Math.atan2(sy,sx)/(2*Math.PI)*pitch)%pitch+pitch)%pitch;
+    let xmin=W,xmax=0;for(let x=0;x<W;x++)if(cnt[x]>=2){xmin=Math.min(xmin,x);xmax=Math.max(xmax,x)}
+    for(let k=Math.floor((xmin-ph)/pitch);k<=Math.ceil((xmax-ph)/pitch);k++){
+      const c=ph+k*pitch;if(c-pitch*0.45<-pitch*0.25||c+pitch*0.45>W-1+pitch*0.25)continue;
+      const x0=Math.max(0,Math.round(c-pitch*0.45)),x1=Math.min(W-1,Math.round(c+pitch*0.45));
+      let t=0;for(let x=x0;x<=x1;x++)t+=cnt[x];if(x1-x0<2||t<3)continue;runs.push([x0,x1])}
+  }else runs=gr.filter(([a,b])=>b-a+1>=Math.max(2,gmax*0.35));
+  const out=[];
+  for(const [x0,x1] of runs){
+    const w=x1-x0+1;let cu=0,cd=0;for(let y=0;y<BH;y++)for(let x=x0;x<=x1;x++){cu+=U(x,y);cd+=Dn(x,y)}
+    const isUp=cu>=cd,M=isUp?U:Dn,cw=Math.max(1,Math.floor(w/3)),m0=x0+Math.floor((w-cw)/2);
+    let top=-1,bot=-1,hi=-1,lo=-1;
+    for(let y=0;y<BH;y++){let wd=0,mid=false;for(let x=x0;x<=x1;x++)if(M(x,y))wd++;
+      for(let x=m0;x<m0+cw;x++)if(C(x,y)){mid=true;break}
+      const body=wd>=Math.max(1,0.5*w);if(body){if(top<0)top=y;bot=y}
+      if(body||mid){if(hi<0)hi=y;lo=y}}
+    if(top<0)continue;
+    const yy=v=>-(by0+v);  // 가격 = -y
+    out.push({x0,x1,up:isUp,o:isUp?yy(bot):yy(top),c:isUp?yy(top):yy(bot),h:yy(hi),l:yy(lo)});
+  }
+  return {cs:out,band:[by0,by1],scheme,X0,Y0};
+}
+
+/* ---------- 비교 ---------- */
+function norm(a){let hi=-Infinity,lo=Infinity;for(const r of a){hi=Math.max(hi,r[1]);lo=Math.min(lo,r[2])}
+  const rg=hi-lo>0?hi-lo:1,o0=a[0][0];return a.map(r=>r.map(v=>(v-o0)/rg))}
+const WT=[1.2,0.8,0.8,1.2];
+function rank(q){const qn=norm(q),n=q.length,res=[];
+  for(const day of DAYS){const seg=day.bars.slice(0,n);if(seg.length<n||seg.some(b=>!b))continue;
+    const cn=norm(seg);let s=0;for(let i=0;i<n;i++)for(let j=0;j<4;j++)s+=WT[j]*(qn[i][j]-cn[i][j])**2;
+    res.push({d:day.d,dist:Math.sqrt(s/(4*n)),bars:day.bars})}
+  return res.sort((a,b)=>a.dist-b.dist)}
+
+/* ---------- 그리기 ---------- */
+function setup(cv,ratio){const w=cv.clientWidth||cv.parentElement.clientWidth,h=Math.round(w*ratio),dp=window.devicePixelRatio||1;
+  cv.style.height=h+'px';cv.width=Math.round(w*dp);cv.height=Math.round(h*dp);const g=cv.getContext('2d');g.setTransform(dp,0,0,dp,0,0);return [g,w,h]}
+function candles(cv,bars,{ratio=0.56,i0=0,hl=null,sess=null,labels=true,yTicks=true,thin=false}={}){
+  const [g,W,H]=setup(cv,ratio);g.clearRect(0,0,W,H);
+  const L=6,Rm=yTicks?46:6,T=6,Bm=labels?20:6,pw=W-L-Rm,ph=H-T-Bm,n=bars.length;
+  let hi=-Infinity,lo=Infinity;for(const b of bars)if(b){hi=Math.max(hi,b[1]);lo=Math.min(lo,b[2])}
+  if(hi===lo){hi+=1;lo-=1}const pad=(hi-lo)*0.06;hi+=pad;lo-=pad;
+  const X=i=>L+(i+0.5)*pw/n,Y=v=>T+(hi-v)/(hi-lo)*ph,bw=Math.max(1,pw/n*(thin?0.7:0.62));
+  g.font='10px '+css('--mono');g.fillStyle=css('--muted');g.strokeStyle=css('--grid');g.lineWidth=1;
+  if(yTicks){const st=niceStep((hi-lo)/4);for(let v=Math.ceil(lo/st)*st;v<=hi;v+=st){const y=Math.round(Y(v))+.5;
+    g.beginPath();g.moveTo(L,y);g.lineTo(L+pw,y);g.stroke();g.textAlign='left';g.textBaseline='middle';g.fillText(v.toFixed(2),L+pw+4,y)}}
+  if(sess){g.fillStyle=css('--sess');g.fillRect(X(sess[0])-pw/n/2,T,(sess[1]-sess[0])*pw/n,ph)}
+  if(hl){g.fillStyle=css('--hl');g.fillRect(X(hl[0])-pw/n/2,T,(hl[1]-hl[0])*pw/n,ph)}
+  const upc=css('--up'),dnc=css('--down'),wk=css('--wick');
+  bars.forEach((b,i)=>{if(!b)return;const [o,h,l,c]=b,col=c>=o?upc:dnc;
+    g.strokeStyle=thin?wk:col;g.lineWidth=1;g.beginPath();g.moveTo(Math.round(X(i))+.5,Y(h));g.lineTo(Math.round(X(i))+.5,Y(l));g.stroke();
+    g.fillStyle=col;const y1=Y(Math.max(o,c)),y2=Y(Math.min(o,c));g.fillRect(X(i)-bw/2,y1,bw,Math.max(1,y2-y1))});
+  if(labels){g.fillStyle=css('--muted');g.textAlign='center';g.textBaseline='top';
+    const fit=Math.max(2,Math.floor(pw/46));
+    if(n>60){const step=[20,40,80,160].find(s=>n/s<=fit)||160;
+      for(let i=0;i<=n;i+=step)g.fillText(clock(i0+i),Math.min(Math.max(L+i*pw/n,14),W-14),T+ph+5)}
+    else{const step=Math.ceil(n/fit);for(let i=0;i<n;i+=step)g.fillText(clock(i0+i),Math.min(Math.max(X(i),14),W-14),T+ph+5)}}
+}
+function niceStep(r){const p=10**Math.floor(Math.log10(r)),m=r/p;return (m<1.5?1:m<3.5?2:m<7.5?5:10)*p}
+
+let lastQ=null,lastRes=null;
+function run(){
+  pending=false;if(!IMG)return;
+  const ex=extract(IMG,CROP);
+  if(ex.err){status(ex.err,true);drawOverlay(null);return}
+  let cs=ex.cs;if(cs.length>N)cs=cs.slice(-N);
+  drawOverlay(ex,cs);
+  if(cs.length<3){status('캔들을 '+cs.length+'개밖에 못 읽었습니다. 왼쪽 사진에서 차트 부분만 끌어서 선택해 보세요.',true);$('results').innerHTML='';return}
+  const q=cs.map(c=>[c.o,c.h,c.l,c.c]);
+  const res=rank(q).slice(0,5);lastQ=q;lastRes=res;
+  status('캔들 '+cs.length+'개를 읽었습니다'+(ex.cs.length>N?' (사진 속 '+ex.cs.length+'개 중 마지막 '+N+'개)':'')+(cs.length<N?' — 10개보다 적어서 09:00부터 '+cs.length+'개만 비교':'')+'. 비슷한 날 5개:');
+  drawResults();
+}
+function drawResults(){
+  if(!lastQ)return;const q=lastQ,n=q.length;
+  $('qTitle').textContent='비교에 쓴 모양 (캔들 '+n+'개, 09:00부터)';
+  candles($('qc'),norm(q).map(r=>r),{ratio:0.56,yTicks:false});
+  const box=$('results');box.innerHTML='';
+  lastRes.forEach((r,k)=>{
+    const sec=document.createElement('section');sec.className='panel card';
+    const seg=r.bars.slice(0,n),o0=r.bars.find(b=>b)[0],all=r.bars.filter(b=>b);
+    const hi=Math.max(...all.map(b=>b[1])),lo=Math.min(...all.map(b=>b[2])),endc=all.at(-1)[3];
+    const pc=v=>(v>=0?'+':'')+v.toFixed(1)+'%';
+    sec.innerHTML='<div class="rk">'+(k+1)+'순위 &nbsp;<span>'+r.d+'</span> ('+wdOf(r.d)+')</div>'+
+      '<div class="kv">차이 '+r.dist.toFixed(3)+' · 09:00~'+clock(n)+' '+seg[0][0].toFixed(2)+'→'+seg[n-1][3].toFixed(2)+' ('+pc((seg[n-1][3]/seg[0][0]-1)*100)+')'+
+      ' · 하루: 시가 '+o0.toFixed(2)+' 고가 '+hi.toFixed(2)+'('+pc((hi/o0-1)*100)+') 저가 '+lo.toFixed(2)+'('+pc((lo/o0-1)*100)+') 마감 '+endc.toFixed(2)+'('+pc((endc/o0-1)*100)+')</div>'+
+      '<div class="two"><div><h3>09:00~09:30</h3><canvas></canvas></div><div><h3>하루 전체 (09:00 → 다음날 09:00, 주황 = 비교 구간, 회색 = 미국 정규장)</h3><canvas></canvas></div></div>';
+    box.appendChild(sec);
+    const [c1,c2]=sec.querySelectorAll('canvas');
+    const mob=innerWidth<=640;
+    candles(c1,seg,{ratio:mob?0.6:0.75});
+    const st=STOCK[r.d];
+    candles(c2,r.bars,{ratio:mob?0.6:0.3125,hl:[0,n],sess:st?[st[2],st[3]]:null,thin:true});
+  });
+}
+
+/* ---------- 읽은 캔들 표시 + 끌어서 영역 선택 ---------- */
+const ov=$('ov');let drag=null,lastEx=null,lastCs=null;
+function drawOverlay(ex,cs){
+  $('qSec').hidden=false;lastEx=ex;lastCs=cs;
+  const W=IMG.w,H=IMG.h;ov.width=W;ov.height=H;ov.style.height='';
+  const g=ov.getContext('2d');g.drawImage(IMG.canvas,0,0);
+  const lw=Math.max(2,W/300);
+  if(CROP){g.fillStyle='rgba(0,0,0,.35)';g.fillRect(0,0,W,CROP[1]);g.fillRect(0,CROP[3],W,H-CROP[3]);g.fillRect(0,CROP[1],CROP[0],CROP[3]-CROP[1]);g.fillRect(CROP[2],CROP[1],W-CROP[2],CROP[3]-CROP[1])}
+  if(ex&&cs){g.strokeStyle='#ff8a00';g.lineWidth=lw;g.fillStyle='#ff8a00';g.font='bold '+Math.round(W/40)+'px sans-serif';
+    cs.forEach((c,i)=>{const x=ex.X0+c.x0,y=ex.Y0-c.h,w=c.x1-c.x0,h=c.h-c.l;g.strokeRect(x-lw,y-lw,w+2*lw,h+2*lw);g.fillText(String(i+1),x,ex.Y0-c.l+Math.round(W/40)+lw)})}
+  if(drag){g.strokeStyle='#ff8a00';g.setLineDash([lw*3,lw*2]);g.lineWidth=lw;g.strokeRect(drag.x0,drag.y0,drag.x1-drag.x0,drag.y1-drag.y0);g.setLineDash([])}
+  $('resetCrop').hidden=!CROP;
+}
+const toImg=e=>{const r=ov.getBoundingClientRect(),sc=Math.min(r.width/IMG.w,r.height/IMG.h),ox=(r.width-IMG.w*sc)/2,oy=(r.height-IMG.h*sc)/2;
+  return [Math.max(0,Math.min(IMG.w,(e.clientX-r.left-ox)/sc)),Math.max(0,Math.min(IMG.h,(e.clientY-r.top-oy)/sc))]};
+ov.addEventListener('pointerdown',e=>{if(!IMG)return;ov.setPointerCapture(e.pointerId);const [x,y]=toImg(e);drag={x0:x,y0:y,x1:x,y1:y}});
+ov.addEventListener('pointermove',e=>{if(!drag)return;const [x,y]=toImg(e);drag.x1=x;drag.y1=y;drawOverlay(lastEx,lastCs)});
+ov.addEventListener('pointerup',()=>{if(!drag)return;const d=drag;drag=null;
+  const x0=Math.round(Math.min(d.x0,d.x1)),x1=Math.round(Math.max(d.x0,d.x1)),y0=Math.round(Math.min(d.y0,d.y1)),y1=Math.round(Math.max(d.y0,d.y1));
+  if(x1-x0>20&&y1-y0>20){CROP=[x0,y0,x1,y1];run()}else drawOverlay(lastEx,lastCs)});
+$('resetCrop').addEventListener('click',()=>{CROP=null;run()});
+let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(drawResults,150)});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',drawResults);
+</script>
+</body>
+</html>

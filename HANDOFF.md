@@ -43,6 +43,9 @@
 - 이전 프로젝트(코스피/코루 엑셀 분석)는 별도 — 그 노트는 사용자가 따로 가지고 있음
 
 ## 비슷한 날 찾기 (2026-11-14 추가)
+- 웹페이지: https://hyeonsooj.github.io/chart/similar/ (#koru 기본, #soxl) — 사진 올리면 브라우저에서 바로 1~5순위 표시
+  (chart/similar/index.html, 데이터는 ../data/<종목>/data.js·stock.js 그대로 사용 → 자동 갱신됨)
+  find_similar.py 와 같은 인식·비교 방식(JS로 옮김). 차트 페이지 위쪽에 링크 있음
 - 사용자가 KORU 3분봉 09:00~09:30 사진을 채팅에 올리면 → 가장 비슷한 과거 날 차트 그림을 채팅에 올려주면 됨
 - 도구: tools/pattern/find_similar.py (필요: `pip install matplotlib`, numpy·Pillow)
   - `python tools/pattern/find_similar.py 사진.png --out <스크래치패드>/결과` (SOXL은 `--sym soxl`)
