@@ -62,6 +62,11 @@ canvas{display:block;width:100%}
   <nav class="symnav" id="symNav" aria-label="종목"></nav>
 </header>
 
+<section class="panel" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px">
+  <button class="btn" id="liveBtn" type="button">오늘 09:00~09:30으로 찾기</button>
+  <span class="sub">사진 없이 바이낸스에서 오늘 3분봉을 바로 받아 비교합니다 (09:30 전이면 지금까지 나온 캔들만)</span>
+</section>
+
 <section class="panel">
   <label id="drop" for="file">
     <b>09:00~09:30 3분봉 차트 사진 올리기</b>
@@ -74,7 +79,7 @@ canvas{display:block;width:100%}
 
 <section class="panel" id="qSec" hidden>
   <div class="qrow">
-    <div>
+    <div id="ovBox">
       <h3>사진에서 읽은 캔들 (주황 상자) — 틀리면 차트 부분만 손가락/마우스로 끌어서 선택</h3>
       <canvas id="ov"></canvas>
       <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
@@ -94,9 +99,10 @@ canvas{display:block;width:100%}
 비교 방법: 사진 속 캔들 중 마지막 10개(= 09:00~09:27 시작 3분봉 10개)의 시가·고가·저가·종가를 첫 시가 기준, 최고~최저 폭으로 맞춰 <b>모양만</b> 남기고,
 과거 평일(월~금, 토·일 제외) 각 날의 09:00~09:30 바이낸스 3분봉 10개와 차이(작을수록 비슷)를 계산해 1~5순위를 보여줍니다. 사진에 가격 눈금이 없어도 됩니다.
 캔들 색은 바이낸스처럼 <b>초록 = 양봉(상승), 빨강 = 음봉(하락)</b>으로 읽고 그립니다(사진이 빨강·파랑 국내식이면 빨강 = 양봉으로 자동 판단). 아래 큰 차트는 그 날 09:00 ~ 15:30(한국시간)만 보여줍니다.
-데이터: <a href="../">분봉 차트</a>와 같은 바이낸스 공식 아카이브(매일 자동 갱신, 전날까지). 사진은 이 브라우저 안에서만 처리되고 어디에도 올라가지 않습니다.
+데이터: <a href="../">분봉 차트</a>와 같은 바이낸스 공식 아카이브(매일 자동 갱신, 전날까지). 「오늘 09:00~09:30으로 찾기」는 이 브라우저가 바이낸스 선물 API에서 오늘 3분봉을 직접 받습니다(한국에서 열면 됨, 해외 VPN이면 막힐 수 있음). 사진은 이 브라우저 안에서만 처리되고 어디에도 올라가지 않습니다.
 </div>
 
+<script src="../live.js"></script>
 <script>
 const SITES={koru:'KORUUSDT',soxl:'SOXLUSDT'};
 const SYM=(()=>{const h=location.hash.slice(1).toLowerCase();return SITES[h]?h:'koru'})();
@@ -243,8 +249,24 @@ function candles(cv,bars,{ratio=0.56,i0=0,hl=null,sess=null,labels=true,yTicks=t
 function niceStep(r){const p=10**Math.floor(Math.log10(r)),m=r/p;return (m<1.5?1:m<3.5?2:m<7.5?5:10)*p}
 
 let lastQ=null,lastRes=null;
+let LIVEQ=false;
+/* ---------- 오늘 09:00~09:30 (바이낸스에서 직접) ---------- */
+$('liveBtn').addEventListener('click',async()=>{
+  if(!DAYS){status('데이터를 아직 불러오는 중입니다. 잠시 뒤 다시 눌러 주세요.',true);return}
+  const b=$('liveBtn');b.disabled=true;status('바이낸스에서 오늘 3분봉 받는 중…');
+  try{const t=LIVE.today(),r=await LIVE.day(SITES[SYM],t,['3m']);
+    if(!r||r['3m'][0]!==0){status('오늘 09:00 캔들이 아직 없습니다 (09:00 이후에 다시 눌러 주세요).',true);return}
+    const f=r['3m'][1],n=Math.min(N,f.length/5),q=[];for(let i=0;i<n;i++)q.push([f[i*5]/100,f[i*5+1]/100,f[i*5+2]/100,f[i*5+3]/100]);
+    if(n<2){status('오늘 캔들이 아직 '+n+'개뿐입니다. 09:06 이후에 다시 눌러 주세요.',true);return}
+    LIVEQ=t;IMG=null;$('qSec').hidden=false;$('ovBox').hidden=true;
+    lastQ=q;lastRes=rank(q).filter(x=>x.d!==t).slice(0,5);
+    status('오늘('+t+' '+wdOf(t)+') 09:00~'+clock(n)+' 실제 3분봉 '+n+'개로 찾았습니다'+(n<N?' (아직 진행 중 — 09:30 이후 다시 누르면 10개 전부로 비교)':'')+'. 비슷한 날 5개:');
+    drawResults();
+  }catch(e){status('오늘 데이터를 받지 못했습니다: '+e.message+' — 해외 VPN을 끄고 다시 해 보거나, 사진을 올려 주세요.',true)}
+  finally{b.disabled=false}});
+
 function run(){
-  pending=false;if(!IMG)return;
+  pending=false;if(!IMG)return;LIVEQ=false;$('ovBox').hidden=false;
   const ex=extract(IMG,CROP);
   if(ex.err){status(ex.err,true);drawOverlay(null);return}
   let cs=ex.cs;if(cs.length>N)cs=cs.slice(-N);
@@ -257,8 +279,8 @@ function run(){
 }
 function drawResults(){
   if(!lastQ)return;const q=lastQ,n=q.length;
-  $('qTitle').textContent='비교에 쓴 모양 (캔들 '+n+'개, 09:00부터)';
-  candles($('qc'),norm(q).map(r=>r),{ratio:0.56,yTicks:false});
+  if(LIVEQ){$('qTitle').textContent='오늘 '+LIVEQ+' ('+wdOf(LIVEQ)+') 09:00~'+clock(n)+' 실제 3분봉 (바이낸스)';candles($('qc'),q,{ratio:0.56})}
+  else{$('qTitle').textContent='비교에 쓴 모양 (캔들 '+n+'개, 09:00부터)';candles($('qc'),norm(q).map(r=>r),{ratio:0.56,yTicks:false})}
   const box=$('results');box.innerHTML='';
   lastRes.forEach((r,k)=>{
     const sec=document.createElement('section');sec.className='panel card';
