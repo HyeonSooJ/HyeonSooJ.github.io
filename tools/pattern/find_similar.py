@@ -176,14 +176,14 @@ def norm(ohlc):
     return (a[:, :4] - a[0, 0]) / (rng if rng > 0 else 1)
 
 
-def rank(q, days, before=None, start=0, exclude=()):
+def rank(q, days, before=None, start=0, exclude=(), only=None):
     qn = norm(q)
     n = len(q)
     res = []
     for d, a in days.items():
         if before and d >= before:
             continue
-        if d in exclude or date.fromisoformat(d).weekday() >= 5:  # 토·일 제외
+        if d in exclude or date.fromisoformat(d).weekday() >= 5 or (only is not None and d not in only):  # 토·일(·SOXL은 미국 휴장일) 제외
             continue
         seg = a[start:start + n, :4]
         if np.isnan(seg).any():
@@ -249,20 +249,20 @@ def render(qohlc, best, days, sym, out, others, start=0, rank_no=1):
     # 3) 그 날 09:00~15:30
     ax3 = fig.add_subplot(gs[1, :])
     SPAN = 130
-    w = a[:SPAN]
-    ax3.axvspan(start - 0.5, start + n - 0.5, color='#f0a43a', alpha=0.18, lw=0)
+    w = a[start:start + SPAN]  # KORU 09:00~15:30, SOXL 23:30~06:00 (둘 다 3분봉 130개)
+    ax3.axvspan(-0.5, n - 0.5, color='#f0a43a', alpha=0.18, lw=0)
     draw_candles(ax3, w)
     o0 = w[0, 0]
     lo, hi = np.nanmin(w[:, 2]), np.nanmax(w[:, 1])
     endc = w[~np.isnan(w[:, 3])][-1, 3]
     ax3.axhline(o0, color='#888', lw=0.7, ls=':')
-    ax3.set_title(f'{sym.upper()} {d} ({wd}) 09:00 ~ 15:30 3분봉   '
+    ax3.set_title(f'{sym.upper()} {d} ({wd}) {hhmm(start)} ~ {hhmm(start + SPAN)} 3분봉   '
                   f'시가 {o0:.2f}  고가 {hi:.2f}({(hi/o0-1)*100:+.1f}%)  저가 {lo:.2f}({(lo/o0-1)*100:+.1f}%)  '
-                  f'15:30 {endc:.2f}({(endc/o0-1)*100:+.1f}%)', fontsize=11.5)
+                  f'{hhmm(start + SPAN)} {endc:.2f}({(endc/o0-1)*100:+.1f}%)', fontsize=11.5)
     ticks = list(range(0, SPAN + 1, 10))
-    ax3.set_xticks(ticks); ax3.set_xticklabels([hhmm(i) for i in ticks], fontsize=8)
+    ax3.set_xticks(ticks); ax3.set_xticklabels([hhmm(start + i) for i in ticks], fontsize=8)
     ax3.set_xlim(-1.5, SPAN + 0.5); ax3.grid(alpha=.25); ax3.tick_params(axis='y', labelsize=8)
-    ax3.text(start + n + 1, 0.98, '◀ 비교 구간', transform=ax3.get_xaxis_transform(), ha='left', va='top', fontsize=9, color='#b06a00')
+    ax3.text(n + 1, 0.98, '◀ 비교 구간', transform=ax3.get_xaxis_transform(), ha='left', va='top', fontsize=9, color='#b06a00')
     if others:
         fig.text(0.5, 0.005, '다음으로 비슷한 날: ' + ',  '.join(f'{dd}({"월화수목금토일"[date.fromisoformat(dd).weekday()]}) {x:.3f}' for x, dd in others),
                  ha='center', fontsize=10)
@@ -273,7 +273,7 @@ def render(qohlc, best, days, sym, out, others, start=0, rank_no=1):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('image', help='사진 경로, 또는 day:YYYY-MM-DD (그 날 데이터를 그대로 질문으로 사용)')
-    p.add_argument('--start', default='09:00', help='사진 첫 캔들 시각(한국시간)')
+    p.add_argument('--start', help='사진 첫 캔들 시각(한국시간). 기본: KORU 09:00, SOXL 23:30')
     p.add_argument('--n', type=int, help='day: 질문일 때 캔들 개수')
     p.add_argument('--exclude', default='', help='뺄 날짜들, 쉼표로')
     p.add_argument('--sym', default='koru')
@@ -287,6 +287,7 @@ def main():
     p.add_argument('--render', type=int, default=5, help='그림으로 만들 상위 개수')
     a = p.parse_args()
     crop = tuple(int(v) for v in a.crop.split(',')) if a.crop else None
+    a.start = a.start or ('23:30' if a.sym == 'soxl' else '09:00')
     hh, mm = map(int, a.start.split(':'))
     start = (((hh * 60 + mm) - 540) % 1440) // 3
     os.makedirs(a.out, exist_ok=True)
@@ -309,7 +310,11 @@ def main():
         print(f'캔들 {len(cs)}개 인식 (색 규칙 {colors}, 가격 영역 y={band})')
         for i, c in enumerate(cs):
             print(f'  {i+1:2d} {hhmm(start + i)} {"상승" if c["up"] else "하락"}  o{c["o"]} h{c["h"]} l{c["l"]} c{c["c"]}')
-    res = rank(q, days, a.before, start, exclude)
+    only = None
+    if a.sym == 'soxl':
+        t = open(os.path.join(ROOT, 'chart/data/soxl/stock.js')).read()
+        only = set(json.loads(t[t.index('=') + 1:].strip().rstrip(';')))
+    res = rank(q, days, a.before, start, exclude, only)
     print('비슷한 날 (차이 작을수록 비슷):')
     for x, d in res[:a.top]:
         print(f'  {d} ({"월화수목금토일"[date.fromisoformat(d).weekday()]})  {x:.3f}')
