@@ -63,6 +63,13 @@ canvas{display:block;width:100%}
 </header>
 
 <section class="panel" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px">
+  <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;flex-basis:100%">
+    <b style="font-size:13px">비교 시간대(한국시간, 3분봉)</b>
+    <input type="time" id="wsIn" step="60" aria-label="시작 시각" class="btn2"> <span>~</span>
+    <input type="time" id="weIn" step="60" aria-label="끝 시각" class="btn2">
+    <button class="btn2" id="wReset" type="button">기본값</button>
+    <span class="sub" id="wNote"></span>
+  </div>
   <button class="btn" id="liveBtn" type="button">오늘 <span class="tA">09:00</span>~<span class="tZ">09:30</span>으로 찾기</button>
   <span class="sub">사진 없이 바이낸스에서 오늘 3분봉을 바로 받아 비교합니다 (<span class="tZ">09:30</span> 전이면 지금까지 나온 캔들만)</span>
 </section>
@@ -96,8 +103,8 @@ canvas{display:block;width:100%}
 <section id="results"></section>
 
 <div class="note">
-비교 방법: 사진 속 캔들 중 마지막 10개(= <span class="tA">09:00</span>부터 3분봉 10개)의 시가·고가·저가·종가를 첫 시가 기준, 최고~최저 폭으로 맞춰 <b>모양만</b> 남기고,
-과거 평일(월~금, 토·일 제외<span class="tHol"></span>) 각 날의 <span class="tA">09:00</span>~<span class="tZ">09:30</span> 바이낸스 3분봉 10개와 차이(작을수록 비슷)를 계산해 1~5순위를 보여줍니다. 사진에 가격 눈금이 없어도 됩니다.
+비교 방법: 사진 속 캔들 중 마지막 <span class="tN">10</span>개(= <span class="tA">09:00</span>부터 3분봉 <span class="tN">10</span>개, 위에서 고른 시간대)의 시가·고가·저가·종가를 첫 시가 기준, 최고~최저 폭으로 맞춰 <b>모양만</b> 남기고,
+과거 평일(월~금, 토·일 제외<span class="tHol"></span>) 각 날의 <span class="tA">09:00</span>~<span class="tZ">09:30</span> 바이낸스 3분봉 <span class="tN">10</span>개와 차이(작을수록 비슷)를 계산해 1~5순위를 보여줍니다. 사진에 가격 눈금이 없어도 됩니다.
 캔들 색은 바이낸스처럼 <b>초록 = 양봉(상승), 빨강 = 음봉(하락)</b>으로 읽고 그립니다(사진이 빨강·파랑 국내식이면 빨강 = 양봉으로 자동 판단). 아래 큰 차트는 그 날 <span class="tA">09:00</span> ~ <span class="tE">15:30</span>(한국시간)만 보여줍니다.
 데이터: <a href="../">분봉 차트</a>와 같은 바이낸스 공식 아카이브(매일 자동 갱신, 전날까지). 「오늘으로 찾기」는 이 브라우저가 바이낸스 선물 API에서 오늘 3분봉을 직접 받습니다(한국에서 열면 됨, 해외 VPN이면 막힐 수 있음). 사진은 이 브라우저 안에서만 처리되고 어디에도 올라가지 않습니다.
 </div>
@@ -110,16 +117,24 @@ if(location.hash.slice(1)!==SYM)history.replaceState(null,'','#'+SYM);
 addEventListener('hashchange',()=>location.reload());
 /* 종목별 비교 구간(한국시간, 3분봉 순번 = 09:00부터 3분 단위)
    KORU: 09:00~09:30 비교, 아래 차트 09:00~15:30(한국장) / SOXL: 23:30~24:00 비교, 아래 차트 23:30~06:00(미국장) */
-const CFG={koru:{s:0,e:130},soxl:{s:290,e:420,hol:true}}[SYM];
+const DEF={koru:['09:00','09:30'],soxl:['23:30','00:00']}[SYM];   // 기본 비교 시간대
+const CFG={s:0,n:10,e:130,hol:SYM==='soxl'};   // s = 시작 3분봉 순번(09:00=0), n = 봉 개수, e = 아래 큰 차트 끝
 const nav=document.getElementById('symNav');
 for(const k in SITES){const a=document.createElement('a');a.href='#'+k;a.textContent=k.toUpperCase();if(k===SYM)a.className='on';nav.appendChild(a)}
-const N=10, WD=['일','월','화','수','목','금','토'];
+const WD=['일','월','화','수','목','금','토'];
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
 const $=id=>document.getElementById(id);
 const pad2=n=>String(n).padStart(2,'0');
 const clock=i=>{const m=(540+3*i)%1440;return pad2(Math.floor(m/60))+':'+pad2(m%60)};
-document.querySelectorAll('.tA').forEach(e=>e.textContent=clock(CFG.s));document.querySelectorAll('.tZ').forEach(e=>e.textContent=clock(CFG.s+N));
-document.querySelectorAll('.tE').forEach(e=>e.textContent=clock(CFG.e));document.querySelectorAll('.tHol').forEach(e=>e.textContent=CFG.hol?', 미국장 휴장일 제외':'');
+const toMin=v=>{const [h,m]=v.split(':').map(Number);return ((h*60+m)-540+1440)%1440};   // 09:00부터 지난 분
+function setWin(a,b,save){let s0=toMin(a),e0=toMin(b);if(e0<=s0)e0+=1440;e0=Math.min(e0,1440);
+  CFG.s=Math.ceil(s0/3);CFG.n=Math.max(1,Math.floor(e0/3)-CFG.s);CFG.e=Math.min(480,Math.max(CFG.s+130,CFG.s+CFG.n+40));
+  $('wsIn').value=a;$('weIn').value=b;
+  $('wNote').textContent='→ 3분봉 '+CFG.n+'개 ('+clock(CFG.s)+'~'+clock(CFG.s+CFG.n)+')'+(CFG.n<2?' · 2개 이상이 되게 넓혀 주세요':'');
+  document.querySelectorAll('.tA').forEach(e=>e.textContent=clock(CFG.s));document.querySelectorAll('.tZ').forEach(e=>e.textContent=b);
+  document.querySelectorAll('.tE').forEach(e=>e.textContent=clock(CFG.e));document.querySelectorAll('.tN').forEach(e=>e.textContent=CFG.n);
+  document.querySelectorAll('.tHol').forEach(e=>e.textContent=CFG.hol?', 미국장 휴장일 제외':'');
+  if(save)try{localStorage.setItem('sim_win_'+SYM,a+'|'+b)}catch(e){}}
 const wdOf=d=>{const [y,m,dd]=d.split('-').map(Number);return WD[new Date(Date.UTC(y,m-1,dd)).getUTCDay()]};
 const parseJs=t=>JSON.parse(t.slice(t.indexOf('=',t.indexOf('const '))+1).trim().replace(/;$/,''));
 const status=(t,err)=>{const s=$('status');s.textContent=t;s.className=err?'err':''};
@@ -263,12 +278,12 @@ $('liveBtn').addEventListener('click',async()=>{
   try{const t=LIVE.today(),r=await LIVE.day(SITES[SYM],t,['3m']);
     const st=r?r['3m'][0]:0,f=r?r['3m'][1]:[],i0=CFG.s-st,q=[];
     if(!r||st>CFG.s){status('오늘 '+clock(CFG.s)+' 캔들이 아직 없습니다 ('+clock(CFG.s)+' 이후에 다시 눌러 주세요).',true);return}
-    for(let i=i0;i<i0+N&&i*5<f.length;i++)q.push([f[i*5]/100,f[i*5+1]/100,f[i*5+2]/100,f[i*5+3]/100]);
+    for(let i=i0;i<i0+CFG.n&&i*5<f.length;i++)q.push([f[i*5]/100,f[i*5+1]/100,f[i*5+2]/100,f[i*5+3]/100]);
     const n=q.length;
     if(n<2){status('오늘 '+clock(CFG.s)+' 이후 캔들이 아직 '+n+'개뿐입니다. '+clock(CFG.s+2)+' 이후에 다시 눌러 주세요.',true);return}
     LIVEQ=t;IMG=null;$('qSec').hidden=false;$('ovBox').hidden=true;
     lastQ=q;lastRes=rank(q).filter(x=>x.d!==t).slice(0,5);
-    status('오늘('+t+' '+wdOf(t)+') '+clock(CFG.s)+'~'+clock(CFG.s+n)+' 실제 3분봉 '+n+'개로 찾았습니다'+(n<N?' (아직 진행 중 — '+clock(CFG.s+N)+' 이후 다시 누르면 10개 전부로 비교)':'')+'. 비슷한 날 5개:');
+    status('오늘('+t+' '+wdOf(t)+') '+clock(CFG.s)+'~'+clock(CFG.s+n)+' 실제 3분봉 '+n+'개로 찾았습니다'+(n<CFG.n?' (아직 진행 중 — '+clock(CFG.s+CFG.n)+' 이후 다시 누르면 '+CFG.n+'개 전부로 비교)':'')+'. 비슷한 날 5개:');
     drawResults();
   }catch(e){status('오늘 데이터를 받지 못했습니다: '+e.message+' — 해외 VPN을 끄고 다시 해 보거나, 사진을 올려 주세요.',true)}
   finally{b.disabled=false}});
@@ -277,12 +292,12 @@ function run(){
   pending=false;if(!IMG)return;LIVEQ=false;$('ovBox').hidden=false;
   const ex=extract(IMG,CROP);
   if(ex.err){status(ex.err,true);drawOverlay(null);return}
-  let cs=ex.cs;if(cs.length>N)cs=cs.slice(-N);
+  let cs=ex.cs;if(cs.length>CFG.n)cs=cs.slice(-CFG.n);
   drawOverlay(ex,cs);
   if(cs.length<3){status('캔들을 '+cs.length+'개밖에 못 읽었습니다. 왼쪽 사진에서 차트 부분만 끌어서 선택해 보세요.',true);$('results').innerHTML='';return}
   const q=cs.map(c=>[c.o,c.h,c.l,c.c]);
   const res=rank(q).slice(0,5);lastQ=q;lastRes=res;
-  status('캔들 '+cs.length+'개를 읽었습니다'+(ex.cs.length>N?' (사진 속 '+ex.cs.length+'개 중 마지막 '+N+'개)':'')+(cs.length<N?' — 10개보다 적어서 '+clock(CFG.s)+'부터 '+cs.length+'개만 비교':'')+'. 비슷한 날 5개:');
+  status('캔들 '+cs.length+'개를 읽었습니다'+(ex.cs.length>CFG.n?' (사진 속 '+ex.cs.length+'개 중 마지막 '+CFG.n+'개)':'')+(cs.length<CFG.n?' — '+CFG.n+'개보다 적어서 '+clock(CFG.s)+'부터 '+cs.length+'개만 비교':'')+'. 비슷한 날 5개:');
   drawResults();
 }
 function drawResults(){
@@ -328,6 +343,11 @@ ov.addEventListener('pointerup',()=>{if(!drag)return;const d=drag;drag=null;
   const x0=Math.round(Math.min(d.x0,d.x1)),x1=Math.round(Math.max(d.x0,d.x1)),y0=Math.round(Math.min(d.y0,d.y1)),y1=Math.round(Math.max(d.y0,d.y1));
   if(x1-x0>20&&y1-y0>20){CROP=[x0,y0,x1,y1];run()}else drawOverlay(lastEx,lastCs)});
 $('resetCrop').addEventListener('click',()=>{CROP=null;run()});
+(()=>{let w=DEF;try{const v=localStorage.getItem('sim_win_'+SYM);if(v)w=v.split('|')}catch(e){}setWin(w[0],w[1])})();
+const onWin=()=>{if(!$('wsIn').value||!$('weIn').value)return;setWin($('wsIn').value,$('weIn').value,true);
+  if(LIVEQ)$('liveBtn').click();else if(IMG)run()};
+$('wsIn').addEventListener('change',onWin);$('weIn').addEventListener('change',onWin);
+$('wReset').addEventListener('click',()=>{setWin(DEF[0],DEF[1],true);if(LIVEQ)$('liveBtn').click();else if(IMG)run()});
 let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(drawResults,150)});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',drawResults);
 </script>
