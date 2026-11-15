@@ -146,9 +146,8 @@ select.on,input.on{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg)}
   <div id="grid" style="margin-top:8px"></div>
 </section>
 
-<div class="note">출처: Binance USDⓈ-M 선물 <span class="sCoin"></span> 공식 아카이브(data.binance.vision). 하루 = 한국시간 09:00 ~ 익일 09:00. 1·3·5분봉은 바이낸스가 만든 그 간격의 봉을 그대로 쓰고, 10분봉은 바이낸스에 없어서 5분봉 2개를 묶어 만듭니다. 봉 간격과 시간대 설정은 이 브라우저에 기억됩니다. 상장 <span id="listTxt"></span>. 요일은 그날 09:00(한국시간) 기준. 점선 = 실제 <span class="sStock"></span> ETF(<span class="sExch"></span>) 정규장 시가·종가(출처: Yahoo Finance). 「시가·종가 표시」를 체크했을 때만 나옵니다. 데이터는 매일 자동으로 갱신됩니다(바이낸스 아카이브가 다음 날 오후~저녁에 올라온 뒤). 그 전의 어제·오늘(진행 중)은 이 페이지를 열 때 브라우저가 바이낸스에서 직접 받아 보여줍니다(한국에서 열면 됨, 해외 VPN이면 막힐 수 있음). 오늘은 1분마다 새로 받습니다.<span id="xlsxLink"></span></div>
+<div class="note">출처: Binance USDⓈ-M 선물 <span class="sCoin"></span> 공식 아카이브(data.binance.vision). 하루 = 한국시간 09:00 ~ 익일 09:00. 1·3·5분봉은 바이낸스가 만든 그 간격의 봉을 그대로 쓰고, 10분봉은 바이낸스에 없어서 5분봉 2개를 묶어 만듭니다. 봉 간격과 시간대 설정은 이 브라우저에 기억됩니다. 상장 <span id="listTxt"></span>. 요일은 그날 09:00(한국시간) 기준. 점선 = 실제 <span class="sStock"></span> ETF(<span class="sExch"></span>) 정규장 시가·종가(출처: Yahoo Finance). 「시가·종가 표시」를 체크했을 때만 나옵니다. 데이터는 매일 자동으로 갱신됩니다(바이낸스 아카이브가 다음 날 오후~저녁에 올라온 뒤).<span id="xlsxLink"></span></div>
 
-<script src="live.js"></script>
 <script>
 /* ---------- 종목 목록: 종목을 추가하려면 여기에 한 줄 + data/<폴더>에 데이터 ---------- */
 const SITES={
@@ -161,16 +160,10 @@ if(location.hash.slice(1)!==SYM)history.replaceState(null,'','#'+SYM);
 const SITE=Object.assign({key:'chart',path:'chart',base:'data/'+SYM+'/'},SITES[SYM]);
 addEventListener('hashchange',()=>{const h=location.hash.slice(1).toLowerCase();if(SITES[h]&&h!==SYM)location.reload()});
 const parseJs=t=>JSON.parse(t.slice(t.indexOf('=',t.indexOf('const '))+1).trim().replace(/;$/,''));
-let DAYS,STOCK,LIVE_ERR='';
-const LIVEM={m1:{},m5:{}},LIVED=new Set();   // 바이낸스에서 직접 받은 날(저장소엔 아직 없음)
-function addLive(L){Object.keys(L).sort().forEach(d=>{const r=L[d];if(DAYS.some(x=>x[0]===d))return;
-  DAYS.push([d,r['3m'][0],r['3m'][1]]);if(r['1m'])LIVEM.m1[d]=r['1m'];if(r['5m'])LIVEM.m5[d]=r['5m'];LIVED.add(d)})}
+let DAYS,STOCK;
 document.getElementById('h1').textContent=SITE.coin;document.getElementById('range').textContent='데이터 불러오는 중…';
 Promise.all(['data.js','stock.js'].map(f=>fetch(SITE.base+f).then(r=>{if(!r.ok)throw new Error(f+' '+r.status);return r.text()})))
-  .then(([a,b])=>{DAYS=parseJs(a);STOCK=parseJs(b);
-    // 아카이브에 아직 없는 어제·오늘은 브라우저가 바이낸스에서 직접 받아 붙임(실패하면 그냥 어제까지만)
-    document.getElementById('range').textContent='오늘 데이터 받는 중…';
-    return LIVE.since(SITE.coin,DAYS[DAYS.length-1][0],['3m','1m','5m']).then(addLive,e=>{LIVE_ERR=e.message}).then(main)})
+  .then(([a,b])=>{DAYS=parseJs(a);STOCK=parseJs(b);main()})
   .catch(e=>{document.getElementById('range').textContent='데이터를 불러오지 못했습니다: '+e.message});
 function main(){
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -197,8 +190,8 @@ const SRCK=()=>IV===1?'m1':(IV===5||IV===10)?'m5':null;
 const MD={m1:{},m5:{}},mP={},mDone={};
 function needM1(days){const k=SRCK();return !!k&&days.some(x=>!mDone[k+x.m])}
 function ensureM1(days){const k=SRCK();if(!k)return Promise.resolve();const ms=[...new Set(days.map(x=>x.m))];
-  return Promise.all(ms.map(m=>mP[k+m]||(mP[k+m]=fetch(SITE.base+k+'/'+m+'.json').then(r=>{if(r.status===404)return {};if(!r.ok)throw new Error(k+'/'+m+'.json '+r.status);return r.json()})
-    .then(j=>{Object.assign(MD[k],j,LIVEM[k]);mDone[k+m]=true}).catch(err=>{delete mP[k+m];throw err}))))}
+  return Promise.all(ms.map(m=>mP[k+m]||(mP[k+m]=fetch(SITE.base+k+'/'+m+'.json').then(r=>{if(!r.ok)throw new Error(k+'/'+m+'.json '+r.status);return r.json()})
+    .then(j=>{Object.assign(MD[k],j);mDone[k+m]=true}).catch(err=>{delete mP[k+m];throw err}))))}
 
 /* ---------- 하루치를 선택한 봉·시간대로 다시 묶기 ---------- */
 const VC=new Map();
@@ -239,7 +232,7 @@ function drawChart(g,W,H,x){const v=view(x),sk=SHOW?STOCK[x.d]:null,span=WE-WS;
   for(let o=Math.ceil(WS/ts)*ts;o<=WE;o+=ts){const xx=Math.round(L+(o-WS)/span*pw)+.5;g.strokeStyle=ln;g.beginPath();g.moveTo(xx,T);g.lineTo(xx,T+ph);g.stroke();g.fillStyle=mu;g.fillText(clock(o),Math.max(L+16,Math.min(xx,L+pw-14)),T+ph+6)}
   if(sk){g.lineWidth=1.5;g.setLineDash([6,4]);[[sk[0],'--so'],[sk[1],'--sc']].forEach(([q,c])=>{if(q<lo||q>hi)return;const y=Math.round(Y(q))+.5;g.strokeStyle=css(c);g.beginPath();g.moveTo(L,y);g.lineTo(L+pw,y);g.stroke()});g.setLineDash([]);g.lineWidth=1}
   if(SHOW){g.textBaseline='top';g.textAlign='left';g.font='600 13px '+css('--mono');let lx=L+2;
-    (sk?[['시가 : '+p(sk[0])+(sk[0]<lo||sk[0]>hi?' (화면 밖)':''),'--so'],['종가 : '+p(sk[1])+(sk[1]<lo||sk[1]>hi?' (화면 밖)':''),'--sc']]:[[LIVED.has(x.d)?'주식 시가·종가: 아직 집계 전':'미국장 휴장 (시가·종가 없음)','--muted']]).forEach(([s,c])=>{const col=css(c),dash=c!=='--muted',off=dash?28:0;
+    (sk?[['시가 : '+p(sk[0])+(sk[0]<lo||sk[0]>hi?' (화면 밖)':''),'--so'],['종가 : '+p(sk[1])+(sk[1]<lo||sk[1]>hi?' (화면 밖)':''),'--sc']]:[['미국장 휴장 (시가·종가 없음)','--muted']]).forEach(([s,c])=>{const col=css(c),dash=c!=='--muted',off=dash?28:0;
       if(dash){g.strokeStyle=col;g.lineWidth=1.5;g.setLineDash([6,4]);g.beginPath();g.moveTo(lx,T-12);g.lineTo(lx+22,T-12);g.stroke();g.setLineDash([]);g.lineWidth=1}
       g.fillStyle=col;g.fillText(s,lx+off,T-20);lx+=off+g.measureText(s).width+22})}
   const b=v.b,wk=bw>12?2:1;
@@ -248,15 +241,13 @@ function drawChart(g,W,H,x){const v=view(x),sk=SHOW?STOCK[x.d]:null,span=WE-WS;
   g.textBaseline='middle';g.font='600 11px '+css('--mono');
   [[v.hi,v.h,-1,'고 '],[v.li,v.l,1,'저 ']].forEach(([i,q,dir,t])=>{const xx=X(v.off[i]),y=Y(q)+dir*10;g.fillStyle=fg;const right=xx>L+pw-110;g.textAlign=right?'right':'left';g.fillText(t+p(q)+' '+clock(v.off[i]),xx+(right?-4:4),y)});
   return {L,pw,span,v}}
-function stockTxt(x,html){const sk=STOCK[x.d];if(!sk)return LIVED.has(x.d)?'주식: 아직 집계 전':'주식: 미국장 휴장(주말·공휴일)';const s=sgn((sk[1]/sk[0]-1)*100);
+function stockTxt(x,html){const sk=STOCK[x.d];if(!sk)return '주식: 미국장 휴장(주말·공휴일)';const s=sgn((sk[1]/sk[0]-1)*100);
   return html?`주식 시가 <b style="color:var(--so)">${p(sk[0])}</b> → 종가 <b style="color:var(--sc)">${p(sk[1])}</b> (${s})`:`주식 시가 ${p(sk[0])} → 종가 ${p(sk[1])} (${s})`}
 const winTxt=()=>FULL()?'09:00 ~ 익일 09:00':`${clockL(WS)} ~ ${clockL(WE)}`;
 function select(i,scroll){sel=Math.max(0,Math.min(LAST,i));const x=dayInfo[sel];
   cells.forEach(c=>c.el.classList.toggle('on',c.i===sel));
   document.getElementById('dDate').textContent=`${x.d} (${WD[x.wd]}) ${winTxt()}`;
-  const bd=document.getElementById('dBadge'),isT=LIVED.has(x.d)&&x.d===LIVE.today();
-  bd.textContent=isT?'오늘 · 실시간(1분마다 갱신)':LIVED.has(x.d)?'바이낸스 실시간 데이터(아카이브 전)':'최신';
-  bd.hidden=!(sel===LAST||LIVED.has(x.d));bd.style.color=LIVED.has(x.d)?'var(--up)':'';bd.style.borderColor=LIVED.has(x.d)?'var(--up)':'';
+  document.getElementById('dBadge').hidden=sel!==LAST;
   document.getElementById('prev').disabled=sel===0;document.getElementById('next').disabled=sel===LAST;
   const e=document.getElementById('dChg'),kv=document.getElementById('dKv');tip.hidden=true;
   if(needM1([x])){e.textContent='';kv.textContent=IV+'분봉 데이터를 불러오는 중…';drawBig();
@@ -420,13 +411,7 @@ stockChk.onchange=()=>{SHOW=stockChk.checked;document.getElementById('stockLeg')
 let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(redraw,120)});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',redraw);
 new MutationObserver(redraw).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
-document.getElementById('range').textContent=`상장 ${dayInfo[0].d} ~ ${dayInfo[LAST].d} · ${dayInfo.length}일`+(LIVED.size?' (마지막 '+LIVED.size+'일은 바이낸스 실시간)':LIVE_ERR?' · 오늘 데이터 못 받음: '+LIVE_ERR:'');
-/* ---------- 오늘(진행 중) 1분마다 새로 받기 ---------- */
-setInterval(()=>{const t=LIVE.today(),x=dayInfo.find(z=>z.d===t);if(!x||!LIVED.has(t)||document.hidden)return;
-  LIVE.day(SITE.coin,t,['3m','1m','5m']).then(r=>{if(!r)return;x.st3=r['3m'][0];x.a3=r['3m'][1];
-    if(r['1m']){LIVEM.m1[t]=r['1m'];MD.m1[t]=r['1m']}if(r['5m']){LIVEM.m5[t]=r['5m'];MD.m5[t]=r['5m']}
-    for(const k of [...VC.keys()])if(k.startsWith(t+'|'))VC.delete(k);
-    if(dayInfo[sel]===x)select(sel);cells.forEach(c=>{if(dayInfo[c.i]===x)drawMini(c)})}).catch(()=>{})},60000);
+document.getElementById('range').textContent=`상장 ${dayInfo[0].d} ~ ${dayInfo[LAST].d} · ${dayInfo.length}일`;
 document.title=`${SITE.stock} 분봉 일자별`;
 Object.entries(SITES).forEach(([k,s])=>{const a=document.createElement('a');a.href='#'+k;a.textContent=s.stock;if(k===SYM){a.className='on';a.setAttribute('aria-current','page')}document.getElementById('symNav').appendChild(a)});
 document.querySelectorAll('.sCoin').forEach(e=>e.textContent=SITE.coin);document.querySelectorAll('.sStock').forEach(e=>e.textContent=SITE.stock);document.querySelectorAll('.sExch').forEach(e=>e.textContent=SITE.exch);
