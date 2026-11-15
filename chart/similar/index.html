@@ -67,6 +67,7 @@ canvas{display:block;width:100%}
     <b style="font-size:13px">비교 시간대(한국시간, 3분봉)</b>
     <input type="time" id="wsIn" step="60" aria-label="시작 시각" class="btn2"> <span>~</span>
     <input type="time" id="weIn" step="60" aria-label="끝 시각" class="btn2">
+    <button class="btn" id="wGo" type="button" style="padding:6px 16px">Enter</button>
     <button class="btn2" id="wReset" type="button">기본값</button>
     <span class="sub" id="wNote"></span>
   </div>
@@ -347,6 +348,9 @@ $('resetCrop').addEventListener('click',()=>{CROP=null;run()});
 const onWin=()=>{if(!$('wsIn').value||!$('weIn').value)return;setWin($('wsIn').value,$('weIn').value,true);
   if(LIVEQ)$('liveBtn').click();else if(IMG)run()};
 $('wsIn').addEventListener('change',onWin);$('weIn').addEventListener('change',onWin);
+const go=()=>{if($('wsIn').value&&$('weIn').value)setWin($('wsIn').value,$('weIn').value,true);$('liveBtn').click()};
+$('wGo').addEventListener('click',go);
+['wsIn','weIn'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();go()}}));
 $('wReset').addEventListener('click',()=>{setWin(DEF[0],DEF[1],true);if(LIVEQ)$('liveBtn').click();else if(IMG)run()});
 let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(drawResults,150)});
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',drawResults);
