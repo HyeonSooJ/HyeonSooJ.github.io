@@ -106,7 +106,7 @@ canvas{display:block;width:100%}
 <div class="note">
 비교 방법: 사진 속 캔들 중 마지막 <span class="tN">10</span>개(= 3분봉 <span class="tN">10</span>개, 위에서 고른 시간대)의 시가·고가·저가·종가를 첫 시가 기준, 최고~최저 폭으로 맞춰 <b>모양만</b> 남기고,
 과거 평일(월~금, 토·일 제외<span class="tHol"></span>) 각 날의 <span class="tW">09:00~09:30</span> 바이낸스 3분봉 <span class="tN">10</span>개와 차이(작을수록 비슷)를 계산해 1~5순위를 보여줍니다. 사진에 가격 눈금이 없어도 됩니다.
-캔들 색은 바이낸스처럼 <b>초록 = 양봉(상승), 빨강 = 음봉(하락)</b>으로 읽고 그립니다(사진이 빨강·파랑 국내식이면 빨강 = 양봉으로 자동 판단). 아래 큰 차트는 결과마다 위 = 기준(오늘·사진), 아래 = 그 순위 날을 고른 시간대(<span class="tE">09:00 ~ 09:30</span>, 한국시간) 그대로, 같은 시간축으로 보여줍니다. 09:00을 넘는 구간(예: 08:00~10:30)은 전날 08:00 ~ 그날 10:30으로 이어서 비교합니다.
+캔들 색은 바이낸스처럼 <b>초록 = 양봉(상승), 빨강 = 음봉(하락)</b>으로 읽고 그립니다(사진이 빨강·파랑 국내식이면 빨강 = 양봉으로 자동 판단). 아래 큰 차트는 결과마다 위 = 기준(오늘·사진), 아래 = 그 순위 날을 같은 시간축으로 보여주고, 범위는 항상 KORU 09:00~15:30 / SOXL 23:30~06:00을 포함합니다(지금: <span class="tE">09:00 ~ 15:30</span>, 주황 = 비교한 부분). 09:00을 넘는 구간(예: 08:00~10:30)은 전날 08:00 ~ 그날 10:30으로 이어서 비교합니다.
 데이터: <a href="../">분봉 차트</a>와 같은 바이낸스 공식 아카이브(매일 자동 갱신, 전날까지). 「오늘으로 찾기」는 이 브라우저가 바이낸스 선물 API에서 오늘 3분봉을 직접 받습니다(한국에서 열면 됨, 해외 VPN이면 막힐 수 있음). KORU는 2026-07-15 18:35(한국시간) 바이낸스 계약 변경 전 가격이 ETF의 20배였으므로, 그 이전 가격은 ÷20(거래량 ×20)으로 맞춰 두었습니다. 사진은 이 브라우저 안에서만 처리되고 어디에도 올라가지 않습니다.
 </div>
 
@@ -121,7 +121,8 @@ addEventListener('hashchange',()=>location.reload());
 const DEF={koru:['09:00','09:30'],soxl:['23:30','00:00']}[SYM];   // 기본 비교 시간대
 /* 비교 구간은 '전날 09:00 ~ 오늘 09:00 ~ 익일 09:00' 이틀치(960봉)를 이어 붙인 배열의 순번으로 다룬다.
    p = 시작 순번(0~479 = 전날, 480~959 = 그날), n = 봉 개수, e = 아래 큰 차트 끝, x = 09:00을 넘는지(전날~오늘) */
-const CFG={p:480,n:10,e:610,x:false,a:'09:00',b:'09:30',hol:SYM==='soxl'};
+const SHOW={koru:[480,610],soxl:[770,900]}[SYM];   // 결과 차트 기본 범위(이틀 배열 순번): KORU 09:00~15:30, SOXL 23:30~06:00
+const CFG={d0:480,p:480,n:10,e:610,x:false,a:'09:00',b:'09:30',hol:SYM==='soxl'};
 const nav=document.getElementById('symNav');
 for(const k in SITES){const a=document.createElement('a');a.href='#'+k;a.textContent=k.toUpperCase();if(k===SYM)a.className='on';nav.appendChild(a)}
 const WD=['일','월','화','수','목','금','토'];
@@ -132,11 +133,12 @@ const clock=i=>{const m=(540+3*i)%1440;return pad2(Math.floor(m/60))+':'+pad2(m%
 const toMin=v=>{const [h,m]=v.split(':').map(Number);return ((h*60+m)-540+1440)%1440};   // 09:00부터 지난 분
 function setWin(a,b,save){const s0=toMin(a);let e0=toMin(b);const x=e0<=s0;if(x)e0+=1440;
   const sb=Math.ceil(s0/3);CFG.x=x;CFG.p=(x?0:480)+sb;CFG.n=Math.max(1,Math.floor(e0/3)-sb);
-  CFG.e=Math.min(960,CFG.p+CFG.n);CFG.a=a;CFG.b=b;   // 차트 = 내가 고른 시간대 그대로
+  // 결과 차트 범위 = 기본 구간(KORU 09:00~15:30 / SOXL 23:30~06:00)을 항상 포함하고, 고른 시간대가 더 넓으면 그만큼 넓힘
+  CFG.d0=Math.min(SHOW[0],CFG.p);CFG.e=Math.min(960,Math.max(SHOW[1],CFG.p+CFG.n));CFG.a=a;CFG.b=b;
   $('wsIn').value=a;$('weIn').value=b;
   $('wNote').textContent='→ '+winTxt()+' · 3분봉 '+CFG.n+'개'+(CFG.n<2?' · 2개 이상이 되게 넓혀 주세요':'');
   document.querySelectorAll('.tW').forEach(e=>e.textContent=winTxt());
-  document.querySelectorAll('.tE').forEach(e=>e.textContent=clock(CFG.p)+' ~ '+clock(CFG.e));document.querySelectorAll('.tN').forEach(e=>e.textContent=CFG.n);
+  document.querySelectorAll('.tE').forEach(e=>e.textContent=clock(CFG.d0)+' ~ '+clock(CFG.e));document.querySelectorAll('.tN').forEach(e=>e.textContent=CFG.n);
   document.querySelectorAll('.tHol').forEach(e=>e.textContent=CFG.hol?', 미국장 휴장일 제외':'');
   if(save)try{localStorage.setItem('sim_win_'+SYM,a+'|'+b)}catch(e){}}
 // 09:00을 넘는 구간이면 "전날 08:00 ~ 오늘 10:30" 처럼 표시
@@ -319,24 +321,24 @@ function drawResults(){
   if(LIVEQ){$('qTitle').textContent='기준일 '+LIVEQ+' ('+wdOf(LIVEQ)+') '+segTxt(n)+' 실제 3분봉 (바이낸스)';candles($('qc'),q,{ratio:0.56,i0:CFG.p,cut:480-CFG.p})}
   else{$('qTitle').textContent='비교에 쓴 모양 (캔들 '+n+'개, '+segTxt(n)+')';candles($('qc'),norm(q).map(r=>r),{ratio:0.56,yTicks:false,i0:CFG.p,cut:480-CFG.p})}
   const box=$('results');box.innerHTML='';
-  const len=CFG.e-CFG.p,ref=(LIVEQ?q:norm(q)).concat(new Array(Math.max(0,len-n)).fill(null));
+  const off=CFG.p-CFG.d0,len=CFG.e-CFG.d0,ref=new Array(off).fill(null).concat(LIVEQ?q:norm(q),new Array(Math.max(0,len-off-n)).fill(null)),HL=[off,off+n];
   const refTxt=LIVEQ?'기준일 '+LIVEQ+' ('+wdOf(LIVEQ)+') '+segTxt(n)+' 실제 3분봉':'보내준 사진 (모양만, '+segTxt(n)+')';
   const RAT=innerWidth<=640?0.55:0.3;
   lastRes.forEach((r,k)=>{
     const sec=document.createElement('section');sec.className='panel card';
-    const seg=r.bars.slice(CFG.p,CFG.p+n),win=r.bars.slice(CFG.p,CFG.e),o0=win.find(b=>b)[0],all=win.filter(b=>b);
+    const seg=r.bars.slice(CFG.p,CFG.p+n),win=r.bars.slice(CFG.d0,CFG.e),o0=win.find(b=>b)[0],all=win.filter(b=>b);
     const hi=Math.max(...all.map(b=>b[1])),lo=Math.min(...all.map(b=>b[2])),endc=all.at(-1)[3];
     const pc=v=>(v>=0?'+':'')+v.toFixed(1)+'%';
     sec.innerHTML='<div class="rk">'+(k+1)+'순위 &nbsp;<span>'+r.d+'</span> ('+wdOf(r.d)+')'+(CFG.x?' <span style="font-size:13px;font-weight:500;color:var(--muted)">전날 = '+prevDay(r.d)+' ('+wdOf(prevDay(r.d))+')</span>':'')+'</div>'+
       '<div class="kv">차이 '+r.dist.toFixed(3)+' · '+segTxt(n)+' '+seg[0][0].toFixed(2)+'→'+seg[n-1][3].toFixed(2)+' ('+pc((seg[n-1][3]/seg[0][0]-1)*100)+')'+
-      ' · '+clock(CFG.p)+'~'+clock(CFG.e)+': 시가 '+o0.toFixed(2)+' 고가 '+hi.toFixed(2)+'('+pc((hi/o0-1)*100)+') 저가 '+lo.toFixed(2)+'('+pc((lo/o0-1)*100)+') '+clock(CFG.e)+' '+endc.toFixed(2)+'('+pc((endc/o0-1)*100)+')</div>'+
+      ' · '+clock(CFG.d0)+'~'+clock(CFG.e)+': 시가 '+o0.toFixed(2)+' 고가 '+hi.toFixed(2)+'('+pc((hi/o0-1)*100)+') 저가 '+lo.toFixed(2)+'('+pc((lo/o0-1)*100)+') '+clock(CFG.e)+' '+endc.toFixed(2)+'('+pc((endc/o0-1)*100)+')</div>'+
       '<h3>기준 · '+refTxt+'</h3><canvas></canvas>'+
-      '<h3>'+(k+1)+'순위 '+r.d+' ('+wdOf(r.d)+') · '+clock(CFG.p)+' ~ '+clock(CFG.e)+' ('+(n<len?'주황 = 비교한 부분':'고른 시간대')+(CFG.p<480&&CFG.e>480?', 점선 = 09:00 날짜 바뀜':'')+')</h3><canvas></canvas>';
+      '<h3>'+(k+1)+'순위 '+r.d+' ('+wdOf(r.d)+') · '+clock(CFG.d0)+' ~ '+clock(CFG.e)+' (주황 = 비교한 부분'+(CFG.d0<480&&CFG.e>480?', 점선 = 09:00 날짜 바뀜':'')+')</h3><canvas></canvas>';
     box.appendChild(sec);
     const [c1,c2]=sec.querySelectorAll('canvas');
     // 위 = 기준(내가 고른 시간대, 모든 순위에서 같은 그림), 아래 = 그 순위 날. 시간축을 똑같이 맞춤
-    candles(c1,ref,{ratio:RAT,hl:n<len?[0,n]:null,i0:CFG.p,cut:480-CFG.p,yTicks:!!LIVEQ});
-    candles(c2,win,{ratio:RAT,hl:n<len?[0,n]:null,i0:CFG.p,cut:480-CFG.p});
+    candles(c1,ref,{ratio:RAT,hl:HL,i0:CFG.d0,cut:480-CFG.d0,yTicks:!!LIVEQ});
+    candles(c2,win,{ratio:RAT,hl:HL,i0:CFG.d0,cut:480-CFG.d0});
   });
 }
 
