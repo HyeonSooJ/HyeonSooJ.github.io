@@ -53,6 +53,9 @@ canvas{display:block;width:100%}
 .note{font-size:11px;color:var(--muted);line-height:1.6}
 .note a,.sub a{color:inherit}
 #results{display:flex;flex-direction:column;gap:12px}
+.sc{overflow-x:auto;overflow-y:hidden;cursor:grab;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+.sc h3{position:sticky;left:0;display:inline-block;margin-top:6px}
+.sc canvas{width:auto;max-width:none}
 </style>
 </head>
 <body>
@@ -106,7 +109,7 @@ canvas{display:block;width:100%}
 <div class="note">
 비교 방법: 사진 속 캔들 중 마지막 <span class="tN">10</span>개(= 3분봉 <span class="tN">10</span>개, 위에서 고른 시간대)의 시가·고가·저가·종가를 첫 시가 기준, 최고~최저 폭으로 맞춰 <b>모양만</b> 남기고,
 과거 평일(월~금, 토·일 제외<span class="tHol"></span>) 각 날의 <span class="tW">09:00~09:30</span> 바이낸스 3분봉 <span class="tN">10</span>개와 차이(작을수록 비슷)를 계산해 1~5순위를 보여줍니다. 사진에 가격 눈금이 없어도 됩니다.
-캔들 색은 바이낸스처럼 <b>초록 = 양봉(상승), 빨강 = 음봉(하락)</b>으로 읽고 그립니다(사진이 빨강·파랑 국내식이면 빨강 = 양봉으로 자동 판단). 아래 큰 차트는 결과마다 위 = 기준(오늘·사진), 아래 = 그 순위 날을 같은 시간축으로 보여주고, 범위는 항상 KORU 09:00~15:30 / SOXL 23:30~06:00을 포함합니다(지금: <span class="tE">09:00 ~ 15:30</span>, 주황 = 비교한 부분). 09:00을 넘는 구간(예: 08:00~10:30)은 전날 08:00 ~ 그날 10:30으로 이어서 비교합니다.
+캔들 색은 바이낸스처럼 <b>초록 = 양봉(상승), 빨강 = 음봉(하락)</b>으로 읽고 그립니다(사진이 빨강·파랑 국내식이면 빨강 = 양봉으로 자동 판단). 아래 큰 차트는 결과마다 위 = 기준(오늘·사진), 아래 = 그 순위 날을 같은 시간축으로 그 날 코인 하루 전체(<span class="tE">09:00 ~ 익일 09:00</span>)를 보여줍니다. 차트를 옆으로 밀어서 보세요(주황 = 비교한 부분). 09:00을 넘는 구간(예: 08:00~10:30)은 전날 08:00 ~ 그날 10:30으로 이어서 비교합니다.
 데이터: <a href="../">분봉 차트</a>와 같은 바이낸스 공식 아카이브(매일 자동 갱신, 전날까지). 「오늘으로 찾기」는 이 브라우저가 바이낸스 선물 API에서 오늘 3분봉을 직접 받습니다(한국에서 열면 됨, 해외 VPN이면 막힐 수 있음). KORU는 2026-07-15 18:35(한국시간) 바이낸스 계약 변경 전 가격이 ETF의 20배였으므로, 그 이전 가격은 ÷20(거래량 ×20)으로 맞춰 두었습니다. 사진은 이 브라우저 안에서만 처리되고 어디에도 올라가지 않습니다.
 </div>
 
@@ -121,7 +124,7 @@ addEventListener('hashchange',()=>location.reload());
 const DEF={koru:['09:00','09:30'],soxl:['23:30','00:00']}[SYM];   // 기본 비교 시간대
 /* 비교 구간은 '전날 09:00 ~ 오늘 09:00 ~ 익일 09:00' 이틀치(960봉)를 이어 붙인 배열의 순번으로 다룬다.
    p = 시작 순번(0~479 = 전날, 480~959 = 그날), n = 봉 개수, e = 아래 큰 차트 끝, x = 09:00을 넘는지(전날~오늘) */
-const SHOW={koru:[480,610],soxl:[770,900]}[SYM];   // 결과 차트 기본 범위(이틀 배열 순번): KORU 09:00~15:30, SOXL 23:30~06:00
+const SHOW=[480,960];   // 결과 차트 범위(이틀 배열 순번) = 그 날 코인 하루 전체 09:00 ~ 익일 09:00 (옆으로 밀어서 봄)
 const CFG={d0:480,p:480,n:10,e:610,x:false,a:'09:00',b:'09:30',hol:SYM==='soxl'};
 const nav=document.getElementById('symNav');
 for(const k in SITES){const a=document.createElement('a');a.href='#'+k;a.textContent=k.toUpperCase();if(k===SYM)a.className='on';nav.appendChild(a)}
@@ -138,10 +141,11 @@ function setWin(a,b,save){const s0=toMin(a);let e0=toMin(b);const x=e0<=s0;if(x)
   $('wsIn').value=a;$('weIn').value=b;
   $('wNote').textContent='→ '+winTxt()+' · 3분봉 '+CFG.n+'개'+(CFG.n<2?' · 2개 이상이 되게 넓혀 주세요':'');
   document.querySelectorAll('.tW').forEach(e=>e.textContent=winTxt());
-  document.querySelectorAll('.tE').forEach(e=>e.textContent=clock(CFG.d0)+' ~ '+clock(CFG.e));document.querySelectorAll('.tN').forEach(e=>e.textContent=CFG.n);
+  document.querySelectorAll('.tE').forEach(e=>e.textContent=clock(CFG.d0)+' ~ '+endL());document.querySelectorAll('.tN').forEach(e=>e.textContent=CFG.n);
   document.querySelectorAll('.tHol').forEach(e=>e.textContent=CFG.hol?', 미국장 휴장일 제외':'');
   if(save)try{localStorage.setItem('sim_win_'+SYM,a+'|'+b)}catch(e){}}
 // 09:00을 넘는 구간이면 "전날 08:00 ~ 오늘 10:30" 처럼 표시
+const endL=()=>(CFG.e>=960?'익일 ':'')+clock(CFG.e);
 const winTxt=()=>CFG.x?'전날 '+CFG.a+' ~ 오늘 '+CFG.b:CFG.a+'~'+CFG.b;
 const segTxt=n=>(CFG.x&&CFG.p+n>480?'전날 '+clock(CFG.p)+' ~ 오늘 ':(CFG.x?'전날 ':'')+clock(CFG.p)+'~')+clock(CFG.p+n);
 const DAYMS=86400e3,prevDay=d=>new Date(Date.parse(d+'T00:00:00Z')-DAYMS).toISOString().slice(0,10);
@@ -256,17 +260,19 @@ function rank(q){const qn=norm(q),n=q.length,res=[];
   return res.sort((a,b)=>a.dist-b.dist)}
 
 /* ---------- 그리기 ---------- */
-function setup(cv,ratio){const w=cv.clientWidth||cv.parentElement.clientWidth,h=Math.round(w*ratio),dp=window.devicePixelRatio||1;
+function setup(cv,ratio,fw,fh){if(fw)cv.style.width=fw+'px';const w=fw||cv.clientWidth||cv.parentElement.clientWidth,h=fh||Math.round(w*ratio),dp=window.devicePixelRatio||1;
   cv.style.height=h+'px';cv.width=Math.round(w*dp);cv.height=Math.round(h*dp);const g=cv.getContext('2d');g.setTransform(dp,0,0,dp,0,0);return [g,w,h]}
-function candles(cv,bars,{ratio=0.56,i0=0,hl=null,sess=null,labels=true,yTicks=true,thin=false,cut=-1}={}){
-  const [g,W,H]=setup(cv,ratio);g.clearRect(0,0,W,H);
+function candles(cv,bars,{ratio=0.56,i0=0,hl=null,sess=null,labels=true,yTicks=true,thin=false,cut=-1,px=0,height=0}={}){
+  // px = 봉 하나 폭(px). 주면 캔버스를 봉 수만큼 넓게 그려 옆으로 밀어서 봄
+  const [g,W,H]=setup(cv,ratio,px?6+46+bars.length*px:0,height);g.clearRect(0,0,W,H);
   const L=6,Rm=yTicks?46:6,T=6,Bm=labels?20:6,pw=W-L-Rm,ph=H-T-Bm,n=bars.length;
   let hi=-Infinity,lo=Infinity;for(const b of bars)if(b){hi=Math.max(hi,b[1]);lo=Math.min(lo,b[2])}
   if(hi===lo){hi+=1;lo-=1}const pad=(hi-lo)*0.06;hi+=pad;lo-=pad;
   const X=i=>L+(i+0.5)*pw/n,Y=v=>T+(hi-v)/(hi-lo)*ph,bw=Math.max(1,pw/n*(thin?0.7:0.62));
   g.font='10px '+css('--mono');g.fillStyle=css('--muted');g.strokeStyle=css('--grid');g.lineWidth=1;
   if(yTicks){const st=niceStep((hi-lo)/4);for(let v=Math.ceil(lo/st)*st;v<=hi;v+=st){const y=Math.round(Y(v))+.5;
-    g.beginPath();g.moveTo(L,y);g.lineTo(L+pw,y);g.stroke();g.textAlign='left';g.textBaseline='middle';g.fillText(v.toFixed(2),L+pw+4,y)}}
+    g.beginPath();g.moveTo(L,y);g.lineTo(L+pw,y);g.stroke();g.textAlign='left';g.textBaseline='middle';g.fillText(v.toFixed(2),L+pw+4,y);
+    if(pw>900)for(let x=L+250;x<L+pw-200;x+=400){g.fillStyle=css('--panel');g.fillRect(x-2,y-7,40,14);g.fillStyle=css('--muted');g.fillText(v.toFixed(2),x,y)}}}
   if(sess){g.fillStyle=css('--sess');g.fillRect(X(sess[0])-pw/n/2,T,(sess[1]-sess[0])*pw/n,ph)}
   if(hl){g.fillStyle=css('--hl');g.fillRect(X(hl[0])-pw/n/2,T,(hl[1]-hl[0])*pw/n,ph)}
   if(cut>0&&cut<n){const xc=Math.round(L+cut*pw/n)+.5;g.strokeStyle=css('--muted');g.setLineDash([4,3]);g.beginPath();g.moveTo(xc,T);g.lineTo(xc,T+ph);g.stroke();g.setLineDash([])}
@@ -323,7 +329,6 @@ function drawResults(){
   const box=$('results');box.innerHTML='';
   const off=CFG.p-CFG.d0,len=CFG.e-CFG.d0,ref=new Array(off).fill(null).concat(LIVEQ?q:norm(q),new Array(Math.max(0,len-off-n)).fill(null)),HL=[off,off+n];
   const refTxt=LIVEQ?'기준일 '+LIVEQ+' ('+wdOf(LIVEQ)+') '+segTxt(n)+' 실제 3분봉':'보내준 사진 (모양만, '+segTxt(n)+')';
-  const RAT=innerWidth<=640?0.55:0.3;
   lastRes.forEach((r,k)=>{
     const sec=document.createElement('section');sec.className='panel card';
     const seg=r.bars.slice(CFG.p,CFG.p+n),win=r.bars.slice(CFG.d0,CFG.e),o0=win.find(b=>b)[0],all=win.filter(b=>b);
@@ -331,16 +336,25 @@ function drawResults(){
     const pc=v=>(v>=0?'+':'')+v.toFixed(1)+'%';
     sec.innerHTML='<div class="rk">'+(k+1)+'순위 &nbsp;<span>'+r.d+'</span> ('+wdOf(r.d)+')'+(CFG.x?' <span style="font-size:13px;font-weight:500;color:var(--muted)">전날 = '+prevDay(r.d)+' ('+wdOf(prevDay(r.d))+')</span>':'')+'</div>'+
       '<div class="kv">차이 '+r.dist.toFixed(3)+' · '+segTxt(n)+' '+seg[0][0].toFixed(2)+'→'+seg[n-1][3].toFixed(2)+' ('+pc((seg[n-1][3]/seg[0][0]-1)*100)+')'+
-      ' · '+clock(CFG.d0)+'~'+clock(CFG.e)+': 시가 '+o0.toFixed(2)+' 고가 '+hi.toFixed(2)+'('+pc((hi/o0-1)*100)+') 저가 '+lo.toFixed(2)+'('+pc((lo/o0-1)*100)+') '+clock(CFG.e)+' '+endc.toFixed(2)+'('+pc((endc/o0-1)*100)+')</div>'+
-      '<h3>기준 · '+refTxt+'</h3><canvas></canvas>'+
-      '<h3>'+(k+1)+'순위 '+r.d+' ('+wdOf(r.d)+') · '+clock(CFG.d0)+' ~ '+clock(CFG.e)+' (주황 = 비교한 부분'+(CFG.d0<480&&CFG.e>480?', 점선 = 09:00 날짜 바뀜':'')+')</h3><canvas></canvas>';
+      ' · '+clock(CFG.d0)+'~'+endL()+': 시가 '+o0.toFixed(2)+' 고가 '+hi.toFixed(2)+'('+pc((hi/o0-1)*100)+') 저가 '+lo.toFixed(2)+'('+pc((lo/o0-1)*100)+') '+endL()+' '+endc.toFixed(2)+'('+pc((endc/o0-1)*100)+')</div>'+
+      '<div class="sc"><h3>기준 · '+refTxt+'</h3><canvas></canvas>'+
+      '<h3>'+(k+1)+'순위 '+r.d+' ('+wdOf(r.d)+') · '+clock(CFG.d0)+' ~ '+endL()+' (주황 = 비교한 부분'+(CFG.d0<480&&CFG.e>480?', 점선 = 09:00 날짜 바뀜':'')+')</h3><canvas></canvas></div><div class="sub">← 차트를 옆으로 밀어서 하루 전체(09:00 ~ 익일 09:00)를 볼 수 있습니다</div>';
     box.appendChild(sec);
     const [c1,c2]=sec.querySelectorAll('canvas');
     // 위 = 기준(내가 고른 시간대, 모든 순위에서 같은 그림), 아래 = 그 순위 날. 시간축을 똑같이 맞춤
-    candles(c1,ref,{ratio:RAT,hl:HL,i0:CFG.d0,cut:480-CFG.d0,yTicks:!!LIVEQ});
-    candles(c2,win,{ratio:RAT,hl:HL,i0:CFG.d0,cut:480-CFG.d0});
+    const PX=innerWidth<=640?5:6,HT=innerWidth<=640?220:240;
+    candles(c1,ref,{hl:HL,i0:CFG.d0,cut:480-CFG.d0,yTicks:!!LIVEQ,px:PX,height:HT});
+    candles(c2,win,{hl:HL,i0:CFG.d0,cut:480-CFG.d0,px:PX,height:HT});
+    const sc=sec.querySelector('.sc');sc.scrollLeft=Math.max(0,6+HL[0]*PX-30);   // 처음엔 비교 구간이 보이게
+    dragScroll(sc);
   });
 }
+
+// PC에서 마우스로 끌어서 옆으로 밀기 (폰은 손가락으로 그냥 밀면 됨)
+function dragScroll(el){let x0=null,s0=0;
+  el.addEventListener('mousedown',e=>{x0=e.clientX;s0=el.scrollLeft;el.style.cursor='grabbing';e.preventDefault()});
+  addEventListener('mousemove',e=>{if(x0!==null)el.scrollLeft=s0-(e.clientX-x0)});
+  addEventListener('mouseup',()=>{if(x0!==null){x0=null;el.style.cursor=''}})}
 
 /* ---------- 읽은 캔들 표시 + 끌어서 영역 선택 ---------- */
 const ov=$('ov');let drag=null,lastEx=null,lastCs=null;
