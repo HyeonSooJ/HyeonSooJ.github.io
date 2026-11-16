@@ -65,8 +65,8 @@ canvas{display:block;width:100%}
 <section class="panel" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px">
   <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;flex-basis:100%">
     <b style="font-size:13px">비교 시간대(한국시간, 3분봉)</b>
-    <input type="time" id="wsIn" step="60" aria-label="시작 시각" class="btn2"> <span>~</span>
-    <input type="time" id="weIn" step="60" aria-label="끝 시각" class="btn2">
+    <input type="time" id="wsIn" step="60" aria-label="시작 시각" class="btn2"><button class="btn2" type="button" data-now="wsIn" title="시작을 지금 시각으로">현재</button> <span>~</span>
+    <input type="time" id="weIn" step="60" aria-label="끝 시각" class="btn2"><button class="btn2" type="button" data-now="weIn" title="끝을 지금 시각으로">현재</button>
     <button class="btn" id="wGo" type="button" style="padding:6px 16px">Enter</button>
     <button class="btn2" id="wReset" type="button">기본값</button>
     <span class="sub" id="wNote"></span>
@@ -369,6 +369,9 @@ const onWin=()=>{if(!$('wsIn').value||!$('weIn').value)return;setWin($('wsIn').v
 $('wsIn').addEventListener('change',onWin);$('weIn').addEventListener('change',onWin);
 const go=()=>{if($('wsIn').value&&$('weIn').value)setWin($('wsIn').value,$('weIn').value,true);$('liveBtn').click()};
 $('wGo').addEventListener('click',go);
+// 「현재」 = 지금 한국시간(분 단위)으로 채우기
+const nowKST=()=>{const d=new Date(Date.now()+9*3600e3);return pad2(d.getUTCHours())+':'+pad2(d.getUTCMinutes())};
+document.querySelectorAll('[data-now]').forEach(b=>b.addEventListener('click',()=>{$(b.dataset.now).value=nowKST();onWin()}));
 ['wsIn','weIn'].forEach(id=>$(id).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();go()}}));
 $('wReset').addEventListener('click',()=>{setWin(DEF[0],DEF[1],true);if(LIVEQ)$('liveBtn').click();else if(IMG)run()});
 let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(drawResults,150)});
