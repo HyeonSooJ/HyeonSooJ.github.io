@@ -262,7 +262,7 @@ function rank(q){const qn=norm(q),n=q.length,res=[];
 /* ---------- 그리기 ---------- */
 function setup(cv,ratio,fw,fh){if(fw)cv.style.width=fw+'px';const w=fw||cv.clientWidth||cv.parentElement.clientWidth,h=fh||Math.round(w*ratio),dp=window.devicePixelRatio||1;
   cv.style.height=h+'px';cv.width=Math.round(w*dp);cv.height=Math.round(h*dp);const g=cv.getContext('2d');g.setTransform(dp,0,0,dp,0,0);return [g,w,h]}
-function candles(cv,bars,{ratio=0.56,i0=0,hl=null,sess=null,labels=true,yTicks=true,thin=false,cut=-1,px=0,height=0}={}){
+function candles(cv,bars,{ratio=0.56,i0=0,hl=null,sess=null,labels=true,yTicks=true,thin=false,cut=-1,px=0,height=0,rep=true}={}){
   // px = 봉 하나 폭(px). 주면 캔버스를 봉 수만큼 넓게 그려 옆으로 밀어서 봄
   const [g,W,H]=setup(cv,ratio,px?6+46+bars.length*px:0,height);g.clearRect(0,0,W,H);
   const L=6,Rm=yTicks?46:6,T=6,Bm=labels?20:6,pw=W-L-Rm,ph=H-T-Bm,n=bars.length;
@@ -272,7 +272,7 @@ function candles(cv,bars,{ratio=0.56,i0=0,hl=null,sess=null,labels=true,yTicks=t
   g.font='10px '+css('--mono');g.fillStyle=css('--muted');g.strokeStyle=css('--grid');g.lineWidth=1;
   if(yTicks){const st=niceStep((hi-lo)/4);for(let v=Math.ceil(lo/st)*st;v<=hi;v+=st){const y=Math.round(Y(v))+.5;
     g.beginPath();g.moveTo(L,y);g.lineTo(L+pw,y);g.stroke();g.textAlign='left';g.textBaseline='middle';g.fillText(v.toFixed(2),L+pw+4,y);
-    if(pw>900)for(let x=L+250;x<L+pw-200;x+=400){g.fillStyle=css('--panel');g.fillRect(x-2,y-7,40,14);g.fillStyle=css('--muted');g.fillText(v.toFixed(2),x,y)}}}
+    if(rep&&pw>900)for(let x=L+250;x<L+pw-200;x+=400){g.fillStyle=css('--panel');g.fillRect(x-2,y-7,40,14);g.fillStyle=css('--muted');g.fillText(v.toFixed(2),x,y)}}}
   if(sess){g.fillStyle=css('--sess');g.fillRect(X(sess[0])-pw/n/2,T,(sess[1]-sess[0])*pw/n,ph)}
   if(hl){g.fillStyle=css('--hl');g.fillRect(X(hl[0])-pw/n/2,T,(hl[1]-hl[0])*pw/n,ph)}
   if(cut>0&&cut<n){const xc=Math.round(L+cut*pw/n)+.5;g.strokeStyle=css('--muted');g.setLineDash([4,3]);g.beginPath();g.moveTo(xc,T);g.lineTo(xc,T+ph);g.stroke();g.setLineDash([])}
@@ -329,6 +329,9 @@ function drawResults(){
   const box=$('results');box.innerHTML='';
   const off=CFG.p-CFG.d0,len=CFG.e-CFG.d0,ref=new Array(off).fill(null).concat(LIVEQ?q:norm(q),new Array(Math.max(0,len-off-n)).fill(null)),HL=[off,off+n];
   const refTxt=LIVEQ?'기준일 '+LIVEQ+' ('+wdOf(LIVEQ)+') '+segTxt(n)+' 실제 3분봉':'보내준 사진 (모양만, '+segTxt(n)+')';
+  const sv=document.createElement('section');sv.className='panel';sv.style.cssText='display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center';
+  sv.innerHTML='<button class="btn" type="button" id="saveZip">⬇ 1~5순위 사진 저장 (ZIP 폴더)</button><span class="sub" id="saveMsg">'+clock(CFG.p)+' ~ '+(SYM==='soxl'?'06:00':'15:30')+' 차트 5장 + 기준 1장</span>';
+  box.appendChild(sv);$('saveZip').onclick=saveZip;
   lastRes.forEach((r,k)=>{
     const sec=document.createElement('section');sec.className='panel card';
     const seg=r.bars.slice(CFG.p,CFG.p+n),win=r.bars.slice(CFG.d0,CFG.e),o0=win.find(b=>b)[0],all=win.filter(b=>b);
@@ -349,6 +352,33 @@ function drawResults(){
     dragScroll(sc);
   });
 }
+
+/* ---------- 1~5순위 사진을 ZIP(폴더)으로 저장 ----------
+   범위: 조회 시작 ~ KORU 15:30 / SOXL 06:00 (고른 구간이 더 길면 그 끝까지) */
+function shotRange(){const t=SYM==='soxl'?900:610;let e=t;while(e<=CFG.p)e+=480;return [CFG.p,Math.min(960,Math.max(e,CFG.p+CFG.n))]}
+function shot(title,sub,bars,a,hlLen,yT){
+  const n=bars.length,px=Math.max(3,Math.floor(1500/n)),cv=document.createElement('canvas');
+  candles(cv,bars,{hl:[0,hlLen],i0:a,cut:480-a,px,height:640,yTicks:yT,rep:false});
+  const cw=parseFloat(cv.style.width),W=Math.max(cw+40,900),H=640+110,S=2,o=document.createElement('canvas');o.width=W*S;o.height=H*S;
+  const g=o.getContext('2d');g.scale(S,S);g.fillStyle=css('--panel');g.fillRect(0,0,W,H);
+  g.fillStyle=css('--fg');g.font='700 26px '+css('--sans');g.textBaseline='alphabetic';g.fillText(title,20,40);
+  g.fillStyle=css('--muted');g.font='15px '+css('--sans');g.fillText(sub,20,68);
+  g.drawImage(cv,20,82,cw,640);
+  g.font='12px '+css('--sans');g.fillText('Binance USDⓈ-M '+SITES[SYM]+' 3분봉 · 한국시간 · 주황 = 비교한 부분 · hyeonsooj.github.io/chart/similar',20,H-8);
+  return new Promise(ok=>o.toBlob(ok,'image/png'))}
+function loadZip(){return window.JSZip?Promise.resolve():new Promise((ok,no)=>{const s=document.createElement('script');s.src='../jszip.min.js';s.onload=ok;s.onerror=()=>no(new Error('jszip'));document.head.appendChild(s)})}
+async function saveZip(){const btn=$('saveZip'),msg=$('saveMsg');if(!lastRes||!lastQ)return;btn.disabled=true;
+  try{await loadZip();const [a,e]=shotRange(),n=lastQ.length,hm=i=>clock(i).replace(':',''),tag=hm(a)+'-'+hm(e),
+      base=(LIVEQ||new Date().toISOString().slice(0,10)),folder=SYM.toUpperCase()+'_similar_'+base+'_'+hm(CFG.p)+'-'+hm(CFG.p+CFG.n),zip=new JSZip(),f=zip.folder(folder);
+    const off=CFG.p-a,ref=(LIVEQ?lastQ:norm(lastQ)).concat(new Array(Math.max(0,e-a-n)).fill(null));
+    msg.textContent='사진 만드는 중… 0/6';
+    f.file('0_base_'+(LIVEQ||'photo')+'_'+tag+'.png',await shot('기준 · '+(LIVEQ?LIVEQ+' ('+wdOf(LIVEQ)+')':'보내준 사진'),segTxt(n)+' 비교 · '+clock(a)+' ~ '+clock(e),ref,a,n,!!LIVEQ));
+    for(let k=0;k<lastRes.length;k++){const r=lastRes[k];msg.textContent='사진 만드는 중… '+(k+1)+'/6';
+      f.file((k+1)+'_'+r.d+'_'+['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][WD.indexOf(wdOf(r.d))]+'_'+tag+'.png',await shot((k+1)+'순위  '+r.d+' ('+wdOf(r.d)+')'+(CFG.x?'  · 전날 '+prevDay(r.d):''),'차이 '+r.dist.toFixed(3)+' · '+segTxt(n)+' 비교 · '+clock(a)+' ~ '+clock(e),r.bars.slice(a,e),a,n,true))}
+    msg.textContent='압축 중…';const z=await zip.generateAsync({type:'blob'}),u=URL.createObjectURL(z),l=document.createElement('a');
+    l.href=u;l.download=folder+'.zip';document.body.appendChild(l);l.click();l.remove();setTimeout(()=>URL.revokeObjectURL(u),10000);
+    msg.textContent='완료: '+folder+'.zip (다운로드 폴더). 압축을 풀면 "'+folder+'" 폴더 안에 사진 6장이 있습니다.';
+  }catch(err){msg.textContent='저장 실패: '+err.message}finally{btn.disabled=false}}
 
 // PC에서 마우스로 끌어서 옆으로 밀기 (폰은 손가락으로 그냥 밀면 됨)
 function dragScroll(el){let x0=null,s0=0;
