@@ -84,9 +84,16 @@ def update_candles():
     else:
         sys.exit("data.js가 없습니다. 처음 만들 때는 첫날(상장일)을 네 번째 인자로 주세요.")
     yesterday = dt.datetime.now(dt.timezone.utc).date() - dt.timedelta(days=1)
+    # 저장하지 않을 날(사용자 요청): <폴더>/skip.json = ["YYYY-MM-DD", ...]
+    sp = os.path.join(ROOT, "skip.json")
+    skip = set(json.load(open(sp, encoding="utf-8"))) if os.path.exists(sp) else set()
     added, d = [], last + dt.timedelta(days=1)
     while d <= yesterday:
         ds = d.isoformat()
+        if ds in skip:
+            print(ds, "skip.json에 있어 저장 안 함")
+            d += dt.timedelta(days=1)
+            continue
         k3, k1, k5 = klines("3m", ds), klines("1m", ds), klines("5m", ds)
         if not (k3 and k1 and k5):
             print(ds, "아카이브에 아직 없음 → 다음 실행 때 다시 시도")
