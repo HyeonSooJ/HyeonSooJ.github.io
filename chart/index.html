@@ -43,7 +43,16 @@ button{cursor:pointer} button:hover,select:hover{border-color:var(--muted)}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--fg);outline-offset:1px}
 .bigwrap{position:relative;height:clamp(300px,64vh,760px)}
 #big{width:100%;height:100%;display:block}
-#tip{position:absolute;pointer-events:none;font-family:var(--mono);font-size:11px;background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:4px 6px;white-space:nowrap;font-variant-numeric:tabular-nums}
+#tip{position:absolute;z-index:3;pointer-events:none;min-width:150px;font-family:var(--mono);font-size:13px;line-height:1.55;background:var(--fg);color:var(--bg);opacity:.93;border-radius:8px;padding:8px 12px 9px;font-variant-numeric:tabular-nums;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+#tip.pin{pointer-events:auto}
+#tip .th{display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:var(--sans);font-weight:600;font-size:13px;margin-bottom:3px}
+#tip .tx{display:none;background:transparent;border:0;color:inherit;font-size:18px;line-height:1;padding:0 2px;cursor:pointer}
+#tip.pin .tx{display:block}
+#tip .tr{display:flex;justify-content:space-between;gap:18px}
+#tip .tr span{font-family:var(--sans);opacity:.75}
+#tip .tr b{font-weight:600}
+.ch{position:absolute;z-index:2;pointer-events:none;background:var(--so);opacity:.85}
+#chP{position:absolute;z-index:2;pointer-events:none;font-family:var(--mono);font-size:11px;font-weight:600;background:var(--so);color:#fff;border-radius:3px;padding:2px 5px;font-variant-numeric:tabular-nums}
 .tools{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px}
 .grp{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 .grp .lbl{font-size:12px;color:var(--muted);margin-right:2px}
@@ -107,7 +116,7 @@ select.on,input.on{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg)}
       <button id="saveBig" type="button" class="save">⬇ 사진 저장</button>
     </div>
   </div>
-  <div class="bigwrap"><canvas id="big"></canvas><div id="tip" hidden></div></div>
+  <div class="bigwrap"><canvas id="big"></canvas><div class="ch" id="chV" hidden style="width:1px"></div><div class="ch" id="chH" hidden style="height:1px"></div><div id="chP" hidden></div><div id="tip" hidden></div></div>
 </section>
 
 <section class="tools" aria-label="차트 모아보기">
@@ -240,7 +249,7 @@ function drawChart(g,W,H,x){const v=view(x),sk=SHOW?STOCK[x.d]:null,span=WE-WS;
     g.fillRect(Math.round(xx-wk/2),Y(h),wk,Math.max(1,Y(l)-Y(h)));const w=Math.max(1,bw*.7),y1=Y(Math.max(o,c)),y2=Y(Math.min(o,c));g.fillRect(xx-w/2,y1,w,Math.max(1,y2-y1))}
   g.textBaseline='middle';g.font='600 11px '+css('--mono');
   [[v.hi,v.h,-1,'고 '],[v.li,v.l,1,'저 ']].forEach(([i,q,dir,t])=>{const xx=X(v.off[i]),y=Y(q)+dir*10;g.fillStyle=fg;const right=xx>L+pw-110;g.textAlign=right?'right':'left';g.fillText(t+p(q)+' '+clock(v.off[i]),xx+(right?-4:4),y)});
-  return {L,pw,span,v}}
+  return {L,pw,span,v,T,ph,hi,lo}}
 function stockTxt(x,html){const sk=STOCK[x.d];if(!sk)return '주식: 미국장 휴장(주말·공휴일)';const s=sgn((sk[1]/sk[0]-1)*100);
   return html?`주식 시가 <b style="color:var(--so)">${p(sk[0])}</b> → 종가 <b style="color:var(--sc)">${p(sk[1])}</b> (${s})`:`주식 시가 ${p(sk[0])} → 종가 ${p(sk[1])} (${s})`}
 const winTxt=()=>FULL()?'09:00 ~ 익일 09:00':`${clockL(WS)} ~ ${clockL(WE)}`;
@@ -249,7 +258,7 @@ function select(i,scroll){sel=Math.max(0,Math.min(LAST,i));const x=dayInfo[sel];
   document.getElementById('dDate').textContent=`${x.d} (${WD[x.wd]}) ${winTxt()}`;
   document.getElementById('dBadge').hidden=sel!==LAST;
   document.getElementById('prev').disabled=sel===0;document.getElementById('next').disabled=sel===LAST;
-  const e=document.getElementById('dChg'),kv=document.getElementById('dKv');tip.hidden=true;
+  const e=document.getElementById('dChg'),kv=document.getElementById('dKv');hideTip();
   if(needM1([x])){e.textContent='';kv.textContent=IV+'분봉 데이터를 불러오는 중…';drawBig();
     ensureM1([x]).then(()=>{if(sel===dayInfo.indexOf(x))select(sel,scroll)}).catch(err=>kv.textContent=IV+'분봉 데이터를 불러오지 못했습니다: '+err.message);return}
   const v=view(x);
@@ -258,12 +267,35 @@ function select(i,scroll){sel=Math.max(0,Math.min(LAST,i));const x=dayInfo[sel];
     kv.innerHTML=`${IV}분봉 · 시 <b>${p(v.o)}</b> 고 <b>${p(v.h)}</b> (${clock(v.off[v.hi])}) 저 <b>${p(v.l)}</b> (${clock(v.off[v.li])}) 종 <b>${p(v.c)}</b> · ${v.n}봉${SHOW?' &nbsp;|&nbsp; '+stockTxt(x,true):''}`}
   drawBig();
   if(scroll)document.querySelector('.detail').scrollIntoView({behavior:'smooth',block:'start'})}
-big.addEventListener('mousemove',ev=>{if(!geo)return;const r=big.getBoundingClientRect(),mx=ev.clientX-r.left,v=geo.v;
-  const target=WS+(mx-geo.L)/geo.pw*geo.span;let lo=0,hi=v.n-1,k=-1;while(lo<=hi){const m=(lo+hi)>>1;if(v.off[m]<=target){k=m;lo=m+1}else hi=m-1}
-  if(k<0||target>=v.off[k]+IV){tip.hidden=true;return}const b=v.b,q=k*5;
-  tip.hidden=false;tip.textContent=`${clock(v.off[k])}  시 ${p(b[q])}  고 ${p(b[q+1])}  저 ${p(b[q+2])}  종 ${p(b[q+3])}  (${sgn((b[q+3]/v.o-1)*100)})`;
-  const tw=tip.offsetWidth;tip.style.left=Math.max(0,Math.min(r.width-tw,mx+12))+'px';tip.style.top='4px'});
-big.addEventListener('mouseleave',()=>tip.hidden=true);
+/* ---------- 봉에 커서·손가락을 대면 정보 상자 (시간·종가·시가·고가·저가) ---------- */
+const chV=document.getElementById('chV'),chH=document.getElementById('chH'),chP=document.getElementById('chP');let tipK=-1,pinned=false,downXY=null;
+function hideTip(){tip.hidden=chV.hidden=chH.hidden=chP.hidden=true;tip.classList.remove('pin');tipK=-1;pinned=false}
+function barAt(mx){const v=geo.v,target=WS+(mx-geo.L)/geo.pw*geo.span;let lo=0,hi=v.n-1,k=-1;
+  while(lo<=hi){const m=(lo+hi)>>1;if(v.off[m]<=target){k=m;lo=m+1}else hi=m-1}
+  return (k<0||target>=v.off[k]+IV)?-1:k}
+function showTip(mx,my,touch){if(!geo)return hideTip();const k=barAt(mx);if(k<0)return hideTip();
+  const v=geo.v,b=v.b,q=k*5,x=dayInfo[sel],Yp=val=>geo.T+(geo.hi-val)/(geo.hi-geo.lo)*geo.ph;
+  const cx=geo.L+(v.off[k]-WS+IV/2)/geo.span*geo.pw;if(touch)my=Yp(b[q+3]);my=Math.max(geo.T,Math.min(geo.T+geo.ph,my));
+  chV.style.cssText+=`;left:${Math.round(cx)}px;top:${geo.T}px;height:${geo.ph}px`;
+  chH.style.cssText+=`;top:${Math.round(my)}px;left:${geo.L}px;width:${geo.pw}px`;
+  chP.textContent=p(Math.round(geo.hi-(my-geo.T)/geo.ph*(geo.hi-geo.lo)));chP.style.left=(geo.L+geo.pw+2)+'px';chP.style.top=Math.round(my-9)+'px';
+  if(k!==tipK){tipK=k;const col=b[q+3]>=b[q]?'var(--up)':'var(--down)';
+    tip.innerHTML=`<div class="th"><span>${x.d} (${WD[x.wd]})</span><button class="tx" type="button" aria-label="닫기">×</button></div>`+
+      [['시간',clockL(v.off[k])],['종가',p(b[q+3]),col],['시가',p(b[q])],['고가',p(b[q+1])],['저가',p(b[q+2])]]
+        .map(([n,val,c])=>`<div class="tr"><span>${n}</span><b${c?` style="color:${c}"`:''}>${val}</b></div>`).join('');
+    tip.querySelector('.tx').onclick=hideTip}
+  tip.hidden=chV.hidden=chH.hidden=chP.hidden=false;
+  const W=big.clientWidth,tw=tip.offsetWidth,th=tip.offsetHeight;
+  let left=cx+16;if(left+tw>geo.L+geo.pw)left=cx-16-tw;left=Math.max(geo.L,left);
+  tip.style.left=left+'px';tip.style.top=Math.max(geo.T,Math.min(geo.T+geo.ph-th,my-th/2))+'px'}
+big.style.touchAction='pan-y';
+big.addEventListener('pointermove',ev=>{if(ev.pointerType!=='mouse')return;const r=big.getBoundingClientRect();showTip(ev.clientX-r.left,ev.clientY-r.top,false)});
+big.addEventListener('pointerleave',ev=>{if(ev.pointerType==='mouse')hideTip()});
+big.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse')downXY=[ev.clientX,ev.clientY]});
+big.addEventListener('pointerup',ev=>{if(ev.pointerType==='mouse'||!downXY)return;const moved=Math.hypot(ev.clientX-downXY[0],ev.clientY-downXY[1]);downXY=null;
+  if(moved>10)return;const r=big.getBoundingClientRect();showTip(ev.clientX-r.left,ev.clientY-r.top,true);if(!tip.hidden){pinned=true;tip.classList.add('pin')}});
+document.addEventListener('pointerdown',ev=>{if(pinned&&ev.target!==big&&!tip.contains(ev.target))hideTip()});
+addEventListener('resize',hideTip);
 document.getElementById('prev').onclick=()=>select(sel-1);
 document.getElementById('next').onclick=()=>select(sel+1);
 addEventListener('keydown',e=>{if(e.target.matches('input,select'))return;if(e.key==='ArrowLeft'){select(sel-1);e.preventDefault()}if(e.key==='ArrowRight'){select(sel+1);e.preventDefault()}});
