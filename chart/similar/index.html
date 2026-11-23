@@ -381,6 +381,11 @@ function interactive(sec,ref,win,HL,o0){
     for(const c of [...cvs,...ovs]){c.style.width=W+'px';c.style.height=HT+'px';c.width=Math.round(W*dp);c.height=Math.round(HT*dp);c.getContext('2d').setTransform(dp,0,0,dp,0,0)}}
   function draw(){clamp();const pw=W-L-R,ph=HT-T-B,a=Math.max(0,Math.floor(off)),z=Math.min(N,Math.ceil(off+pw/px)+1),X=i=>L+(i-off+0.5)*px,bw=Math.max(1,px*0.68);
     cvs.forEach((cv,k)=>{const g=cv.getContext('2d'),bars=DATA[k],yT=k===1||!!LIVEQ;g.clearRect(0,0,W,HT);
+      // 표시한 봉 꼬리표 자리(차트 아래 띠): '가격 · 시간', 겹치면 줄을 늘리고 그만큼 차트 높이를 줄임
+      const MKL=[];{const mk=MKS.get(sec.dataset.d+'|'+k),real=k===1||!!LIVEQ;if(mk&&mk.size){g.font='600 11px '+css('--mono');const ends=[];
+        for(const i of [...mk].sort((p1,p2)=>p1-p2)){if(i<a||i>=z||!bars[i])continue;const xx=X(i),s=(real?bars[i][3].toFixed(bars[i][3]<10?3:2)+' · ':'')+clock(CFG.d0+i),w=g.measureText(s).width+12,bx=Math.max(L,Math.min(L+pw-w,xx-w/2));
+          let r=ends.findIndex(e=>bx>e+4);if(r<0){r=ends.length;ends.push(0)}ends[r]=bx+w;MKL.push({i,s,w,bx,r})}}}
+      const rowsN=MKL.length?Math.max(...MKL.map(m=>m.r))+1:0,ph=HT-T-B-(rowsN?rowsN*21+4:0);
       let hi=-Infinity,lo=Infinity;for(let i=a;i<z;i++){const b=bars[i];if(b){hi=Math.max(hi,b[1]);lo=Math.min(lo,b[2])}}
       const empty=hi===-Infinity;if(empty){hi=1;lo=0}if(hi===lo){hi+=hi*0.001||1;lo-=lo*0.001||1}const pad=(hi-lo)*0.08;hi+=pad;lo-=pad;
       const Y=v=>T+(hi-v)/(hi-lo)*ph;cv._g={hi,lo,Y,ph,pw};
@@ -394,13 +399,13 @@ function interactive(sec,ref,win,HL,o0){
       const up=css('--up'),dn=css('--down');
       for(let i=a;i<z;i++){const b=bars[i];if(!b)continue;const [o,h,l,c]=b,x=X(i),col=c>=o?up:dn;g.strokeStyle=col;g.beginPath();g.moveTo(Math.round(x)+.5,Y(h));g.lineTo(Math.round(x)+.5,Y(l));g.stroke();
         g.fillStyle=col;const y1=Y(Math.max(o,c)),y2=Y(Math.min(o,c));g.fillRect(x-bw/2,y1,bw,Math.max(1,y2-y1))}
-      {const mk=MKS.get(sec.dataset.d+'|'+k),real=k===1||!!LIVEQ;if(mk&&mk.size){const fg2=css('--fg'),bg2=css('--bg');g.font='600 11px '+css('--mono');
-       for(const i of mk){if(i<a||i>=z)continue;const bb=bars[i];if(!bb)continue;
-        const xx=X(i),s=clock(CFG.d0+i)+(real?' · '+bb[3].toFixed(bb[3]<10?3:2):''),w2=g.measureText(s).width+12,hh=18;
-        let by=Y(bb[1])-10-hh,dn2=false;if(by<T){by=Y(bb[2])+10;dn2=true}const bx=Math.max(L,Math.min(L+pw-w2,xx-w2/2));
-        g.strokeStyle=fg2;g.lineWidth=1;g.beginPath();g.moveTo(Math.round(xx)+.5,dn2?by:by+hh);g.lineTo(Math.round(xx)+.5,dn2?Y(bb[2])+2:Y(bb[1])-2);g.stroke();
-        g.fillStyle=fg2;g.beginPath();g.roundRect?g.roundRect(bx,by,w2,hh,4):g.rect(bx,by,w2,hh);g.fill();g.fillStyle=bg2;g.textAlign='left';g.textBaseline='middle';g.fillText(s,bx+6,by+hh/2+.5);
-        g.beginPath();g.arc(xx,Y(bb[3]),3,0,7);g.fillStyle=fg2;g.fill()}}}
+      for(const M of MKL){const bb=bars[M.i],xx=X(M.i),ly=T+ph+20+M.r*21;
+        g.strokeStyle=css('--muted');g.setLineDash([2,3]);g.lineWidth=1;g.beginPath();g.moveTo(Math.round(xx)+.5,Y(bb[2])+4);g.lineTo(Math.round(xx)+.5,ly);g.stroke();g.setLineDash([]);
+        g.beginPath();g.arc(xx,Y(bb[3]),3.5,0,7);g.fillStyle=css('--fg');g.fill();
+}
+for(const M of MKL){const bb=bars[M.i],xx=X(M.i),ly=T+ph+20+M.r*21;
+        g.font='600 11px '+css('--mono');g.fillStyle='#ffffff';g.strokeStyle=css('--line')||'#ccc';g.beginPath();g.roundRect?g.roundRect(M.bx,ly,M.w,18,4):g.rect(M.bx,ly,M.w,18);g.fill();g.stroke();
+        g.fillStyle='#111111';g.textAlign='left';g.textBaseline='middle';g.fillText(M.s,M.bx+6,ly+9.5)}
       g.restore();
       // 오른쪽 가격 눈금 · 아래 시각
       g.font='10px '+css('--mono');g.fillStyle=css('--muted');g.textBaseline='middle';g.textAlign='left';

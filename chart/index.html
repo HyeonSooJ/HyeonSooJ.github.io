@@ -241,7 +241,14 @@ const big=document.getElementById('big'),tip=document.getElementById('tip');let 
 let ZA=null,ZB=null;  // 큰 차트 확대 구간(분, 09:00 기준). null = 고른 시간대 전체
 function drawBig(){const [g,W,H]=setup(big);g.clearRect(0,0,W,H);geo=drawChart(g,W,H,dayInfo[sel],ZA??WS,ZB??WE)}
 function drawChart(g,W,H,x,A=WS,B=WE){const v=view(x),sk=SHOW?STOCK[x.d]:null,span=B-A,whole=A===WS&&B===WE;
-  const L=6,R=56,T=SHOW?30:10,BM=22,pw=W-L-R,ph=H-T-BM;
+  const L=6,R=56,T=SHOW?30:10,pw=W-L-R;let BM=22;
+  // 표시한 봉 꼬리표 자리(차트 아래 띠, 겹치면 줄을 늘림)
+  const MKL=[];{const mk=MARKS[x.d];if(mk&&mk.length&&v&&v.n){g.font='600 11px '+css('--mono');const ends=[];
+    for(const m of [...mk].sort((p1,p2)=>p1-p2)){if(m<A||m>=B)continue;let a2=0,z2=v.n-1,k=-1;while(a2<=z2){const md=(a2+z2)>>1;if(v.off[md]<=m){k=md;a2=md+1}else z2=md-1}
+      if(k<0||m>=v.off[k]+IV)continue;const xx=L+(v.off[k]-A+IV/2)/span*pw,s=p(v.b[k*5+3])+' · '+clock(v.off[k]),w=g.measureText(s).width+12,bx=Math.max(L,Math.min(L+pw-w,xx-w/2));
+      let r=ends.findIndex(e=>bx>e+4);if(r<0){r=ends.length;ends.push(0)}ends[r]=bx+w;MKL.push({k,s,w,bx,r})}
+    if(ends.length)BM=22+ends.length*21+6}}
+  const ph=H-T-BM;
   const fg=css('--fg'),mu=css('--muted'),ln=css('--line'),up=css('--up'),dn=css('--down');
   if(!v||!v.n){g.fillStyle=mu;g.font='14px '+css('--sans');g.textAlign='center';g.textBaseline='middle';
     g.fillText(!v?IV+'분봉 데이터를 불러오는 중…':'이 시간대에는 거래 데이터가 없습니다',W/2,H/2);return null}
@@ -264,13 +271,14 @@ function drawChart(g,W,H,x,A=WS,B=WE){const v=view(x),sk=SHOW?STOCK[x.d]:null,sp
   for(let i=0;i<v.n;i++){if(v.off[i]+IV<=A||v.off[i]>=B)continue;const o=b[i*5],h=b[i*5+1],l=b[i*5+2],c=b[i*5+3],xx=X(v.off[i]);g.fillStyle=c>=o?up:dn;
     g.fillRect(Math.round(xx-wk/2),Y(h),wk,Math.max(1,Y(l)-Y(h)));const w=Math.max(1,bw*.7),y1=Y(Math.max(o,c)),y2=Y(Math.min(o,c));g.fillRect(xx-w/2,y1,w,Math.max(1,y2-y1))}
   g.restore();
-  const mk=MARKS[x.d];if(mk&&mk.length){g.font='600 11px '+css('--mono');g.textBaseline='middle';g.textAlign='left';
-    for(const m of mk){if(m<A||m>=B)continue;let lo2=0,hi2=v.n-1,k=-1;while(lo2<=hi2){const md=(lo2+hi2)>>1;if(v.off[md]<=m){k=md;lo2=md+1}else hi2=md-1}
-      if(k<0||m>=v.off[k]+IV)continue;const q=k*5,xx=X(v.off[k]),s=clock(v.off[k])+' · '+p(b[q+3]),w=g.measureText(s).width+12,h=18;
-      let by=Y(b[q+1])-10-h,dn2=false;if(by<T){by=Y(b[q+2])+10;dn2=true}const bx=Math.max(L,Math.min(L+pw-w,xx-w/2));
-      g.strokeStyle=fg;g.lineWidth=1;g.beginPath();g.moveTo(Math.round(xx)+.5,dn2?by:by+h);g.lineTo(Math.round(xx)+.5,dn2?Y(b[q+2])+2:Y(b[q+1])-2);g.stroke();
-      g.fillStyle=fg;g.beginPath();g.roundRect?g.roundRect(bx,by,w,h,4):g.rect(bx,by,w,h);g.fill();g.fillStyle=css('--bg');g.fillText(s,bx+6,by+h/2+.5);
-      g.beginPath();g.arc(xx,Y(b[q+3]),3,0,7);g.fillStyle=fg;g.fill()}}
+  // 표시한 봉: 차트 위 점 + 아래 띠에 '가격 · 시간' (흰 바탕·검은 글씨, 캔들과 안 겹치게)
+  for(const M of MKL){const q=M.k*5,xx=X(v.off[M.k]),yc=Y(b[q+3]),ly=T+ph+22+M.r*21;
+    g.strokeStyle=mu;g.setLineDash([2,3]);g.lineWidth=1;g.beginPath();g.moveTo(Math.round(xx)+.5,Y(b[q+2])+4);g.lineTo(Math.round(xx)+.5,ly);g.stroke();g.setLineDash([]);
+    g.beginPath();g.arc(xx,yc,3.5,0,7);g.fillStyle=fg;g.fill();
+}
+for(const M of MKL){const q=M.k*5,xx=X(v.off[M.k]),yc=Y(b[q+3]),ly=T+ph+22+M.r*21;
+    g.font='600 11px '+css('--mono');g.fillStyle='#ffffff';g.strokeStyle=ln;g.beginPath();g.roundRect?g.roundRect(M.bx,ly,M.w,18,4):g.rect(M.bx,ly,M.w,18);g.fill();g.stroke();
+    g.fillStyle='#111111';g.textAlign='left';g.textBaseline='middle';g.fillText(M.s,M.bx+6,ly+9.5)}
   g.textBaseline='middle';g.font='600 11px '+css('--mono');
   [[hiI,vh,-1,'고 '],[loI,vl,1,'저 ']].forEach(([i,q,dir,t])=>{const xx=X(v.off[i]),y=Y(q)+dir*10;g.fillStyle=fg;const right=xx>L+pw-110;g.textAlign=right?'right':'left';g.fillText(t+p(q)+' '+clock(v.off[i]),xx+(right?-4:4),y)});
   return {L,pw,span,v,T,ph,hi,lo,A,B}}
