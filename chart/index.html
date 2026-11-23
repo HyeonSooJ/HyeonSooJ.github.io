@@ -125,11 +125,11 @@ select.on,input.on{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg)}
     <div class="nav">
       <button id="prev" type="button" aria-label="이전 날">◀ 이전 날</button>
       <button id="next" type="button" aria-label="다음 날">다음 날 ▶</button>
-      <span class="zoom" role="group" aria-label="확대"><button id="zOut" type="button" aria-label="축소">－</button><button id="zIn" type="button" aria-label="확대">＋</button><button id="zAll" type="button" hidden>전체</button></span>
+      <button id="zAll" type="button" title="확대를 풀고 설정한 시간대 전체를 봅니다">처음 화면</button>
       <button id="saveBig" type="button" class="save">⬇ 사진 저장</button>
     </div>
   </div>
-  <div class="zhint">마우스 휠·두 손가락으로 확대 · 끌어서 옆으로 이동 · 꾹 누른 채 옆으로 = 봉마다 값 · 두 번 누르면 원래대로</div>
+  <div class="zhint">마우스 휠·두 손가락으로 확대(설정한 시간대 안에서만) · 끌어서 옆으로 이동 · 꾹 누른 채 옆으로 = 봉마다 값 · 두 번 누르면 원래대로</div>
   <div class="bigwrap"><canvas id="big"></canvas><div class="ch" id="chV" hidden style="width:1px"></div><div class="ch" id="chH" hidden style="height:1px"></div><div id="chP" hidden></div><div id="tip" hidden></div></div>
 </section>
 
@@ -256,8 +256,7 @@ function drawChart(g,W,H,x,A=WS,B=WE){const v=view(x),sk=SHOW?stockFor(x):null,s
   const MKL=[];{const mk=MARKS[x.d];if(mk&&mk.length&&v&&v.n){g.font='600 11px '+css('--mono');const ends=[];
     for(const m of [...mk].sort((p1,p2)=>p1-p2)){if(m<A||m>=B)continue;let a2=0,z2=v.n-1,k=-1;while(a2<=z2){const md=(a2+z2)>>1;if(v.off[md]<=m){k=md;a2=md+1}else z2=md-1}
       if(k<0||m>=v.off[k]+IV)continue;const xx=L+(v.off[k]-A+IV/2)/span*pw,s=p(v.b[k*5+3])+' · '+clockL(v.off[k]),w=g.measureText(s).width+12,bx=Math.max(L,Math.min(L+pw-w,xx-w/2));
-      let r=ends.findIndex(e=>bx>e+4);if(r<0){r=ends.length;ends.push(0)}ends[r]=bx+w;MKL.push({k,s,w,bx,r})}
-    if(ends.length)BM=22+ends.length*21+6}}
+      let r=ends.findIndex(e=>bx>e+4);if(r<0){r=ends.length;ends.push(0)}ends[r]=bx+w;MKL.push({k,s,w,bx,r})}}}
   const ph=H-T-BM;
   const fg=css('--fg'),mu=css('--muted'),ln=css('--line'),up=css('--up'),dn=css('--down');
   if(!v||!v.n){g.fillStyle=mu;g.font='14px '+css('--sans');g.textAlign='center';g.textBaseline='middle';
@@ -281,14 +280,15 @@ function drawChart(g,W,H,x,A=WS,B=WE){const v=view(x),sk=SHOW?stockFor(x):null,s
   for(let i=0;i<v.n;i++){if(v.off[i]+IV<=A||v.off[i]>=B)continue;const o=b[i*5],h=b[i*5+1],l=b[i*5+2],c=b[i*5+3],xx=X(v.off[i]);g.fillStyle=c>=o?up:dn;
     g.fillRect(Math.round(xx-wk/2),Y(h),wk,Math.max(1,Y(l)-Y(h)));const w=Math.max(1,bw*.7),y1=Y(Math.max(o,c)),y2=Y(Math.min(o,c));g.fillRect(xx-w/2,y1,w,Math.max(1,y2-y1))}
   g.restore();
-  // 표시한 봉: 차트 위 점 + 아래 띠에 '가격 · 시간' (흰 바탕·검은 글씨, 캔들과 안 겹치게)
-  for(const M of MKL){const q=M.k*5,xx=X(v.off[M.k]),yc=Y(b[q+3]),ly=T+ph+22+M.r*21;
-    g.strokeStyle=mu;g.setLineDash([2,3]);g.lineWidth=1;g.beginPath();g.moveTo(Math.round(xx)+.5,Y(b[q+2])+4);g.lineTo(Math.round(xx)+.5,ly);g.stroke();g.setLineDash([]);
-    g.beginPath();g.arc(xx,yc,3.5,0,7);g.fillStyle=fg;g.fill();
-}
-for(const M of MKL){const q=M.k*5,xx=X(v.off[M.k]),yc=Y(b[q+3]),ly=T+ph+22+M.r*21;
+  // 표시한 봉: 종가에 점 + 그 봉 바로 아래에 '가격 · 시간' (흰 바탕·검은 글씨, 서로 겹치면 한 칸씩 비켜 놓음)
+  {const PLc=[];const placeL=(bx,w,yLo,yHi,top,bot)=>{   // 봉 바로 아래 → 바로 위 → 한 칸씩 더 떨어진 자리 중 빈 곳
+  const free=y=>y>=top&&y+18<=bot&&!PLc.some(r=>bx<r[0]+r[2]+3&&bx+w+3>r[0]&&y<r[1]+20&&y+20>r[1]),b0=yLo+6,a0=yHi-24;let y=null;
+  for(let n=0;n<12&&y===null;n++)for(const c of [b0+n*20,a0-n*20])if(y===null&&free(c))y=c;
+  if(y===null)y=Math.max(top,Math.min(bot-18,b0));PLc.push([bx,y,w]);return y};
+  for(const M of MKL){const q=M.k*5;g.beginPath();g.arc(X(v.off[M.k]),Y(b[q+3]),3.5,0,7);g.fillStyle=fg;g.fill()}
+  for(const M of MKL){const q=M.k*5,ly=placeL(M.bx,M.w,Y(b[q+2]),Y(b[q+1]),T,T+ph);
     g.font='600 11px '+css('--mono');g.fillStyle='#ffffff';g.strokeStyle=ln;g.beginPath();g.roundRect?g.roundRect(M.bx,ly,M.w,18,4):g.rect(M.bx,ly,M.w,18);g.fill();g.stroke();
-    g.fillStyle='#111111';g.textAlign='left';g.textBaseline='middle';g.fillText(M.s,M.bx+6,ly+9.5)}
+    g.fillStyle='#111111';g.textAlign='left';g.textBaseline='middle';g.fillText(M.s,M.bx+6,ly+9.5)}}
   g.textBaseline='middle';g.font='600 11px '+css('--mono');
   [[hiI,vh,-1,'고 '],[loI,vl,1,'저 ']].forEach(([i,q,dir,t])=>{const xx=X(v.off[i]),y=Y(q)+dir*10;g.fillStyle=fg;const right=xx>L+pw-110;g.textAlign=right?'right':'left';g.fillText(t+p(q)+' '+clockL(v.off[i]),xx+(right?-4:4),y)});
   return {L,pw,span,v,T,ph,hi,lo,A,B}}
@@ -375,7 +375,7 @@ const zAllB=document.getElementById('zAll');window.chartZoom=()=>[ZA,ZB];
 function setZoom(a,b){const full=WE-WS,minS=Math.min(full,IV*8);let s=b-a;
   if(s<minS){const c=(a+b)/2;a=c-minS/2;b=c+minS/2;s=minS}
   if(s>=full-1e-6){ZA=ZB=null}else{if(a<WS){b+=WS-a;a=WS}if(b>WE){a-=b-WE;b=WE}ZA=a;ZB=b}
-  hideTip();reqBig();zAllB.hidden=ZA===null}
+  hideTip();reqBig()}
 let rafB=0;function reqBig(){if(!rafB)rafB=requestAnimationFrame(()=>{rafB=0;drawBig()})}
 /* 손을 떼면 관성으로 미끄러지기 */
 let flB=0;const stopFlB=()=>{if(flB)cancelAnimationFrame(flB);flB=0};
@@ -383,11 +383,9 @@ function flingB(v){if(!geo||ZA===null)return;let last=performance.now();
   const step=t=>{const dt=Math.min(32,t-last);last=t;if(ZA===null||!geo){flB=0;return}const a0=ZA,s=ZB-ZA,dm=-v*dt/geo.pw*s;setZoom(ZA+dm,ZB+dm);v*=Math.exp(-dt/325);
     flB=(Math.abs(v)>0.02&&Math.abs(ZA-a0)>1e-6)?requestAnimationFrame(step):0};flB=requestAnimationFrame(step)}
 /* 폰: 처음엔 캔들이 잘 보이게(봉 하나 약 6px) 하루 끝부분을 확대해서 보여 줌 */
-function defZoom(){ZA=ZB=null;if(matchMedia('(pointer:coarse)').matches&&big.clientWidth<760){const span=Math.round((big.clientWidth-62)/6)*IV;if(span<WE-WS){ZA=WE-span;ZB=WE}}zAllB.hidden=ZA===null}
+function defZoom(){ZA=ZB=null;if(matchMedia('(pointer:coarse)').matches&&big.clientWidth<760){const span=Math.round((big.clientWidth-62)/6)*IV;if(span<WE-WS){ZA=WE-span;ZB=WE}}}
 function zoomAt(f,frac){const a=ZA??WS,b=ZB??WE,s=b-a,c=a+s*frac;setZoom(c-s*f*frac,c+s*f*(1-frac))}
 const fracAt=cx=>{const r=big.getBoundingClientRect();return geo?Math.max(0,Math.min(1,(cx-r.left-geo.L)/geo.pw)):.5};
-document.getElementById('zIn').onclick=()=>zoomAt(.6,.5);
-document.getElementById('zOut').onclick=()=>zoomAt(1/.6,.5);
 zAllB.onclick=()=>setZoom(WS,WE);
 big.addEventListener('wheel',ev=>{if(!geo)return;ev.preventDefault();stopFlB();zoomAt(ev.deltaY>0?1.2:1/1.2,fracAt(ev.clientX))},{passive:false});
 big.addEventListener('dblclick',()=>setZoom(WS,WE));
@@ -536,8 +534,8 @@ const ivGrp=document.getElementById('ivGrp'),wsIn=document.getElementById('wsIn'
 const wsD=document.getElementById('wsD'),weD=document.getElementById('weD');
 const toOff=(s,dd)=>{const [h,m]=s.split(':').map(Number);return (h*60+m)-540+dd*1440};   // 달력 기준: 전날/당일/익일 + 시각
 function readWin(){if(!wsIn.value||!weIn.value)return;let s=toOff(wsIn.value,+wsD.value),e=toOff(weIn.value,+weD.value);
-  if(e<=s)e+=1440*Math.ceil((s-e+1)/1440);   // 끝이 시작보다 빠르면 다음 날로
-  WS=s;WE=Math.min(e,2880)
+  if(e<=s){winNote.textContent='끝이 시작보다 빠릅니다 — 끝 날(전날/당일/익일)이나 시각을 바꿔 주세요';winNote.style.color='var(--up)';return}   // 자동으로 바꾸지 않음
+  winNote.style.color='';WS=s;WE=Math.min(e,2880)
   store.set(SITE.key+'_ws',WS);store.set(SITE.key+'_we',WE);applySettings()}
 wsIn.onchange=readWin;weIn.onchange=readWin;wsD.onchange=readWin;weD.onchange=readWin;
 document.getElementById('winAll').onclick=()=>{WS=0;WE=1440;store.set(SITE.key+'_ws',0);store.set(SITE.key+'_we',1440);applySettings()};
