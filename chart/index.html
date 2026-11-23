@@ -181,7 +181,8 @@ Promise.all(['data.js','stock.js'].map(f=>fetch(SITE.base+f).then(r=>{if(!r.ok)t
   .then(([a,b])=>{DAYS=parseJs(a);STOCK=parseJs(b);main()})
   .catch(e=>{document.getElementById('range').textContent='데이터를 불러오지 못했습니다: '+e.message});
 function main(){
-const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const _cc=new Map();const css=n=>{let v=_cc.get(n);if(v===undefined){v=getComputedStyle(document.documentElement).getPropertyValue(n).trim();_cc.set(n,v)}return v};  // 색은 한 번만 읽어 둠(그리기 빠르게)
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>_cc.clear());new MutationObserver(()=>_cc.clear()).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 const WD=['일','월','화','수','목','금','토'],WDE=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const dayInfo=DAYS.map(([d,st,a])=>{const [y,m,dd]=d.split('-').map(Number);
   return {d,st3:st,a3:a,wd:new Date(Date.UTC(y,m-1,dd)).getUTCDay(),m:d.slice(0,7)}});
@@ -224,8 +225,8 @@ function view(x){const key=x.d+'|'+IV+'|'+WS+'|'+WE;if(VC.has(key))return VC.get
 const pctV=v=>(v.c/v.o-1)*100;
 const sgn=x=>(x>=0?'+':'')+x.toFixed(2)+'%';
 
-function setup(cv){const r=cv.getBoundingClientRect(),dp=window.devicePixelRatio||1;
-  cv.width=Math.max(1,Math.round(r.width*dp));cv.height=Math.max(1,Math.round(r.height*dp));
+function setup(cv){const r=cv.getBoundingClientRect(),dp=window.devicePixelRatio||1,w=Math.max(1,Math.round(r.width*dp)),h=Math.max(1,Math.round(r.height*dp));
+  if(cv.width!==w||cv.height!==h){cv.width=w;cv.height=h}
   const g=cv.getContext('2d');g.setTransform(dp,0,0,dp,0,0);return [g,r.width,r.height]}
 function niceStep(r,n){const s=r/n,m=Math.pow(10,Math.floor(Math.log10(s))),f=s/m;return (f<1.5?1:f<3?2:f<7?5:10)*m}
 
@@ -310,26 +311,35 @@ const zAllB=document.getElementById('zAll');window.chartZoom=()=>[ZA,ZB];
 function setZoom(a,b){const full=WE-WS,minS=Math.min(full,IV*8);let s=b-a;
   if(s<minS){const c=(a+b)/2;a=c-minS/2;b=c+minS/2;s=minS}
   if(s>=full-1e-6){ZA=ZB=null}else{if(a<WS){b+=WS-a;a=WS}if(b>WE){a-=b-WE;b=WE}ZA=a;ZB=b}
-  hideTip();drawBig();zAllB.hidden=ZA===null}
+  hideTip();reqBig();zAllB.hidden=ZA===null}
+let rafB=0;function reqBig(){if(!rafB)rafB=requestAnimationFrame(()=>{rafB=0;drawBig()})}
+/* 손을 떼면 관성으로 미끄러지기 */
+let flB=0;const stopFlB=()=>{if(flB)cancelAnimationFrame(flB);flB=0};
+function flingB(v){if(!geo||ZA===null)return;let last=performance.now();
+  const step=t=>{const dt=Math.min(32,t-last);last=t;if(ZA===null||!geo){flB=0;return}const a0=ZA,s=ZB-ZA,dm=-v*dt/geo.pw*s;setZoom(ZA+dm,ZB+dm);v*=Math.exp(-dt/325);
+    flB=(Math.abs(v)>0.02&&Math.abs(ZA-a0)>1e-6)?requestAnimationFrame(step):0};flB=requestAnimationFrame(step)}
+/* 폰: 처음엔 캔들이 잘 보이게(봉 하나 약 6px) 하루 끝부분을 확대해서 보여 줌 */
+function defZoom(){ZA=ZB=null;if(matchMedia('(pointer:coarse)').matches&&big.clientWidth<760){const span=Math.round((big.clientWidth-62)/6)*IV;if(span<WE-WS){ZA=WE-span;ZB=WE}}zAllB.hidden=ZA===null}
 function zoomAt(f,frac){const a=ZA??WS,b=ZB??WE,s=b-a,c=a+s*frac;setZoom(c-s*f*frac,c+s*f*(1-frac))}
 const fracAt=cx=>{const r=big.getBoundingClientRect();return geo?Math.max(0,Math.min(1,(cx-r.left-geo.L)/geo.pw)):.5};
 document.getElementById('zIn').onclick=()=>zoomAt(.6,.5);
 document.getElementById('zOut').onclick=()=>zoomAt(1/.6,.5);
 zAllB.onclick=()=>setZoom(WS,WE);
-big.addEventListener('wheel',ev=>{if(!geo)return;ev.preventDefault();zoomAt(ev.deltaY>0?1.2:1/1.2,fracAt(ev.clientX))},{passive:false});
+big.addEventListener('wheel',ev=>{if(!geo)return;ev.preventDefault();stopFlB();zoomAt(ev.deltaY>0?1.2:1/1.2,fracAt(ev.clientX))},{passive:false});
 big.addEventListener('dblclick',()=>setZoom(WS,WE));
 const ptrs=new Map();let drag=null,pinch=null,lastTap=0;
-big.addEventListener('pointerdown',ev=>{if(!geo)return;ptrs.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
+big.addEventListener('pointerdown',ev=>{if(!geo)return;stopFlB();ptrs.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
   if(ptrs.size===2){const [p1,p2]=[...ptrs.values()];pinch={d:Math.abs(p1.x-p2.x)||1,f:fracAt((p1.x+p2.x)/2),a:ZA??WS,b:ZB??WE};drag=null;downXY=null;hideTip();return}
   if(ev.pointerType==='mouse'&&ev.button!==0)return;
-  drag={x:ev.clientX,a:ZA??WS,b:ZB??WE,moved:false};
+  drag={x:ev.clientX,a:ZA??WS,b:ZB??WE,moved:false,v:0,t:0,lx:ev.clientX};
   if(ev.pointerType!=='mouse'){const now=Date.now();if(now-lastTap<300){setZoom(WS,WE);drag=null;downXY=null}lastTap=now}});
 big.addEventListener('pointermove',ev=>{if(!ptrs.has(ev.pointerId))return;ptrs.set(ev.pointerId,{x:ev.clientX,y:ev.clientY});
   if(pinch&&ptrs.size===2){const [p1,p2]=[...ptrs.values()],d=Math.abs(p1.x-p2.x)||1,s=(pinch.b-pinch.a)*pinch.d/d,c=pinch.a+(pinch.b-pinch.a)*pinch.f;
     setZoom(c-s*pinch.f,c+s*(1-pinch.f));return}
+  if(drag){const now=performance.now();if(drag.t){const dt=now-drag.t;if(dt>0)drag.v=.8*(ev.clientX-drag.lx)/dt+.2*drag.v}drag.t=now;drag.lx=ev.clientX}
   if(drag&&ZA!==null){const dx=ev.clientX-drag.x;if(Math.abs(dx)>4){drag.moved=true;downXY=null;big.classList.add('drag');
     const dm=-dx/geo.pw*(drag.b-drag.a);setZoom(drag.a+dm,drag.b+dm)}}});
-function endPtr(ev){ptrs.delete(ev.pointerId);if(ptrs.size<2)pinch=null;if(!ptrs.size){drag=null;big.classList.remove('drag')}}
+function endPtr(ev){ptrs.delete(ev.pointerId);if(ptrs.size<2)pinch=null;if(!ptrs.size){if(drag&&drag.moved&&ev.type==='pointerup'&&performance.now()-drag.t<80&&Math.abs(drag.v)>0.05)flingB(drag.v);drag=null;big.classList.remove('drag')}}
 big.addEventListener('pointerup',endPtr);big.addEventListener('pointercancel',endPtr);big.addEventListener('pointerleave',ev=>{if(ev.pointerType==='mouse')endPtr(ev)});
 document.getElementById('prev').onclick=()=>select(sel-1);
 document.getElementById('next').onclick=()=>select(sel+1);
@@ -465,14 +475,14 @@ function readWin(){if(!wsIn.value||!weIn.value)return;let s=toOff(wsIn.value),e=
   store.set(SITE.key+'_ws',WS);store.set(SITE.key+'_we',WE);applySettings()}
 wsIn.onchange=readWin;weIn.onchange=readWin;
 document.getElementById('winAll').onclick=()=>{WS=0;WE=1440;store.set(SITE.key+'_ws',0);store.set(SITE.key+'_we',1440);applySettings()};
-function applySettings(){VC.clear();ZA=ZB=null;
+function applySettings(){VC.clear();defZoom();
   ivGrp.querySelectorAll('.chipbtn').forEach(b=>b.classList.toggle('on',+b.dataset.iv===IV));
   wsIn.value=clock(WS);weIn.value=clock(WE%1440);
   const mins=WE-WS;winNote.textContent=FULL()?'하루 전체 (09:00 ~ 익일 09:00)':`${clockL(WS)} ~ ${clockL(WE)} · ${mins>=60?Math.floor(mins/60)+'시간 ':''}${mins%60?mins%60+'분':''}`;
   document.getElementById('h1').textContent=`${SITE.coin} ${IV}분봉`;
   select(sel);if(!gridSec.hidden&&curIdx.length)showGrid(curIdx,curTitle,curFile,true)}
 
-function redraw(){drawBig();cells.forEach(drawMini)}
+function redraw(){_cc.clear();drawBig();cells.forEach(drawMini)}
 const stockChk=document.getElementById('stockChk');
 stockChk.onchange=()=>{SHOW=stockChk.checked;document.getElementById('stockLeg').hidden=!SHOW;select(sel);cells.forEach(drawMini)};
 let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(redraw,120)});

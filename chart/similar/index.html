@@ -136,7 +136,8 @@ const CFG={d0:480,p:480,n:10,e:610,x:false,a:'09:00',b:'09:30',hol:SYM==='soxl'}
 const nav=document.getElementById('symNav');
 for(const k in SITES){const a=document.createElement('a');a.href='#'+k;a.textContent=k.toUpperCase();if(k===SYM)a.className='on';nav.appendChild(a)}
 const WD=['일','월','화','수','목','금','토'];
-const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const _cc=new Map();const css=n=>{let v=_cc.get(n);if(v===undefined){v=getComputedStyle(document.documentElement).getPropertyValue(n).trim();_cc.set(n,v)}return v};  // 색은 한 번만 읽어 둠(그리기 빠르게)
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>_cc.clear());new MutationObserver(()=>_cc.clear()).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
 const $=id=>document.getElementById(id);
 const pad2=n=>String(n).padStart(2,'0');
 const clock=i=>{const m=(540+3*i)%1440;return pad2(Math.floor(m/60))+':'+pad2(m%60)};
@@ -366,6 +367,12 @@ function interactive(sec,ref,win,HL,o0){
   const DATA=[ref,win],N=win.length,HT=innerWidth<=640?230:270,L=6,R=50,T=8,B=20;
   let px=PX0(),off=0,cross=null,W=0;
   const vis=()=>(W-L-R)/px;
+  // 화면 갱신에 맞춰 한 번만 그리기 + 손을 떼면 관성으로 미끄러지기
+  let raf=0,vel=0,lt=0,lx=0,fl=0;const req=()=>{if(!raf)raf=requestAnimationFrame(()=>{raf=0;draw()})};
+  const track=x=>{const t=performance.now();if(lt){const dt=t-lt;if(dt>0)vel=.8*(x-lx)/dt+.2*vel}lt=t;lx=x};
+  const stopFl=()=>{if(fl)cancelAnimationFrame(fl);fl=0;vel=0;lt=0};
+  function fling(){const v0=vel,age=performance.now()-lt;vel=0;lt=0;if(age>80||Math.abs(v0)<0.05)return;let v=v0,last=performance.now();
+    const step=t=>{const dt=Math.min(32,t-last);last=t;const before=off;off-=v*dt/px;draw();v*=Math.exp(-dt/325);fl=(Math.abs(v)>0.02&&Math.abs(off-before)>1e-6)?requestAnimationFrame(step):0};fl=requestAnimationFrame(step)}
   const clamp=()=>{const v=vis();off=Math.max(-v*0.3,Math.min(N-v*0.7,off))};
   function size(){W=sc.clientWidth;const dp=window.devicePixelRatio||1;
     for(const c of [...cvs,...ovs]){c.style.width=W+'px';c.style.height=HT+'px';c.width=Math.round(W*dp);c.height=Math.round(HT*dp);c.getContext('2d').setTransform(dp,0,0,dp,0,0)}}
@@ -406,27 +413,27 @@ function interactive(sec,ref,win,HL,o0){
   const kAt=t=>cvs.indexOf(t)>=0?cvs.indexOf(t):ovs.indexOf(t);
   function setCross(cx,cy,t){const k=Math.max(0,kAt(t)),r=cvs[k].getBoundingClientRect();cross={i:idxAt(cx),k,y:cy-r.top};drawCross()}
   function zoom(f,cx){const r=cvs[1].getBoundingClientRect(),x=(cx==null?r.left+W/2:cx)-r.left-L,idx=off+x/px;
-    px=f===0?PX0():Math.max(1.5,Math.min(60,px*f));off=idx-x/px;draw()}
+    px=f===0?PX0():Math.max(1.5,Math.min(60,px*f));off=idx-x/px;req()}
   // 마우스: 끌기 = 이동, 휠 = 확대·축소, 올리기 = 십자선
   let md=null;
   // (터치가 흉내 내는 마우스 이벤트와 섞이지 않게 pointerType이 mouse인 것만)
-  sc.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse')return;md={x:e.clientX,o:off};sc.style.cursor='grabbing';e.preventDefault()});
-  addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&md){off=md.o-(e.clientX-md.x)/px;draw()}});
-  addEventListener('pointerup',e=>{if(e.pointerType==='mouse'&&md){md=null;sc.style.cursor=''}});
+  sc.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse')return;stopFl();md={x:e.clientX,o:off};sc.style.cursor='grabbing';e.preventDefault()});
+  addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&md){off=md.o-(e.clientX-md.x)/px;track(e.clientX);req()}});
+  addEventListener('pointerup',e=>{if(e.pointerType==='mouse'&&md){md=null;sc.style.cursor='';fling()}});
   sc.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&!md&&kAt(e.target)>=0)setCross(e.clientX,e.clientY,e.target)});
   sc.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'&&!md){cross=null;drawCross()}});
-  sc.addEventListener('wheel',e=>{e.preventDefault();if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){off+=e.deltaX/px;draw()}else zoom(e.deltaY<0?1.15:1/1.15,e.clientX)},{passive:false});
+  sc.addEventListener('wheel',e=>{e.preventDefault();stopFl();if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){off+=e.deltaX/px;req()}else zoom(e.deltaY<0?1.15:1/1.15,e.clientX)},{passive:false});
   // 터치: 한 손가락 = 옆으로 이동(세로는 페이지 스크롤), 두 손가락 = 확대·축소, 짧게 누르기 = 십자선
   const pts=new Map();let pinch=null,pan=null,tap=null;
-  sc.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  sc.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;stopFl();pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),px,cx:(a.x+b.x)/2};pan=null;tap=null}
     else{pan={x:e.clientX,o:off};tap={x:e.clientX,y:e.clientY,t:e.target}}});
   sc.addEventListener('pointermove',e=>{if(!pts.has(e.pointerId))return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
     if(tap&&Math.hypot(e.clientX-tap.x,e.clientY-tap.y)>8)tap=null;
     if(pinch&&pts.size===2){const [a,b]=[...pts.values()],d=Math.hypot(a.x-b.x,a.y-b.y),r=cvs[1].getBoundingClientRect(),x=pinch.cx-r.left-L,idx=off+x/px;
-      px=Math.max(1.5,Math.min(60,pinch.px*d/pinch.d));off=idx-x/px;draw()}
-    else if(pan){off=pan.o-(e.clientX-pan.x)/px;draw()}});
-  const end=e=>{if(tap&&e.type==='pointerup'&&kAt(tap.t)>=0)setCross(tap.x,tap.y,tap.t);tap=null;pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!pts.size)pan=null};
+      px=Math.max(1.5,Math.min(60,pinch.px*d/pinch.d));off=idx-x/px;req()}
+    else if(pan){off=pan.o-(e.clientX-pan.x)/px;track(e.clientX);req()}});
+  const end=e=>{if(tap&&e.type==='pointerup'&&kAt(tap.t)>=0)setCross(tap.x,tap.y,tap.t);tap=null;pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!pts.size){if(pan&&e.type==='pointerup')fling();pan=null}};
   sc.addEventListener('pointerup',end);sc.addEventListener('pointercancel',end);
   sec.querySelectorAll('[data-z]').forEach(b=>b.addEventListener('click',()=>{const z=+b.dataset.z;if(z===0){px=PX0();off=HL[0]-3;draw()}else zoom(z>0?1.5:1/1.5)}));
   size();off=Math.max(0,HL[0]-3);draw();   // 처음엔 비교 구간부터
