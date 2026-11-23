@@ -41,7 +41,7 @@ h1{font-size:18px;margin:0;font-weight:700;letter-spacing:-.01em}
 button,select,input{font:inherit;font-size:13px;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:5px 11px}
 button{cursor:pointer} button:hover,select:hover{border-color:var(--muted)}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--fg);outline-offset:1px}
-.bigwrap{position:relative;height:clamp(300px,64vh,760px)}
+.bigwrap{position:relative;height:clamp(300px,64vh,760px);touch-action:pan-y}
 #big{width:100%;height:100%;display:block}
 #tip{position:absolute;z-index:3;pointer-events:none;min-width:150px;font-family:var(--mono);font-size:13px;line-height:1.55;background:var(--fg);color:var(--bg);opacity:.93;border-radius:8px;padding:8px 12px 9px;font-variant-numeric:tabular-nums;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 #tip.pin .tx,#tip.pin .tchk{pointer-events:auto}   /* 상자가 떠 있어도 그 아래 차트는 계속 밀고 누를 수 있게 (× 버튼만 누름) */
@@ -322,6 +322,12 @@ big.addEventListener('pointerup',ev=>{if(ev.pointerType==='mouse'||!downXY||MARK
   if(moved>10)return;const r=big.getBoundingClientRect();showTip(ev.clientX-r.left,ev.clientY-r.top,true);if(!tip.hidden){pinned=true;tip.classList.add('pin')}});
 document.addEventListener('pointerdown',ev=>{if(pinned&&ev.target!==big&&!tip.contains(ev.target))hideTip()});
 addEventListener('resize',hideTip);
+/* 차트 위에서 두 손가락을 벌리면 페이지 전체가 아니라 차트만 확대되게 (브라우저 화면 확대 막기) */
+(()=>{const onChart=e=>[...(e.touches||[])].some(t=>t.target&&t.target.closest&&t.target.closest('.bigwrap'));
+  const stop=e=>{if(e.touches&&e.touches.length>1&&onChart(e))e.preventDefault()};
+  document.addEventListener('touchstart',stop,{passive:false});document.addEventListener('touchmove',stop,{passive:false});
+  document.addEventListener('gesturestart',e=>{if(e.target&&e.target.closest&&e.target.closest('.bigwrap'))e.preventDefault()},{passive:false})})();
+
 /* ---------- 봉 표시(체크하면 누른 봉에 시각·가격이 계속 붙어 있음, 다시 누르면 지움, 브라우저에 기억) ---------- */
 let MARK=false,MARKS={},clickXY=null;try{MARKS=JSON.parse(localStorage.getItem('chart_marks_'+SYM)||'{}')||{}}catch(e){MARKS={}}
 const saveMarks=()=>{try{localStorage.setItem('chart_marks_'+SYM,JSON.stringify(MARKS))}catch(e){}};

@@ -539,6 +539,12 @@ document.querySelectorAll('[data-now]').forEach(b=>b.addEventListener('click',()
 $('wReset').addEventListener('click',()=>{setWin(DEF[0],DEF[1],true);if(LIVEQ)$('liveBtn').click();else if(IMG)run()});
 $('markClr').onclick=()=>{MKS.clear();redrawers.forEach(f=>f())};
 let rt;addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(drawResults,150)});
+/* 차트 위에서 두 손가락을 벌리면 페이지 전체가 아니라 차트만 확대되게 (브라우저 화면 확대 막기) */
+(()=>{const onChart=e=>[...(e.touches||[])].some(t=>t.target&&t.target.closest&&t.target.closest('.sc'));
+  const stop=e=>{if(e.touches&&e.touches.length>1&&onChart(e))e.preventDefault()};
+  document.addEventListener('touchstart',stop,{passive:false});document.addEventListener('touchmove',stop,{passive:false});
+  document.addEventListener('gesturestart',e=>{if(e.target&&e.target.closest&&e.target.closest('.sc'))e.preventDefault()},{passive:false})})();
+
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change',drawResults);
 </script>
 </body>
