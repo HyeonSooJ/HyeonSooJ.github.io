@@ -64,6 +64,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid 
 .chipbtn.on,#allBtn.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 select.on,input.on{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg)}
 #allBtn{font-weight:600}
+.mk{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;cursor:pointer}.mk input{width:16px;height:16px;margin:0;accent-color:var(--fg);cursor:pointer}
 .symnav{margin-left:auto;display:flex;gap:6px}
 .symnav a{font-size:13px;font-weight:600;color:var(--fg);text-decoration:none;border:1px solid var(--line);border-radius:999px;padding:3px 12px}
 .symnav a.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
@@ -106,6 +107,7 @@ select.on,input.on{border-color:var(--fg);box-shadow:0 0 0 1px var(--fg)}
     <button id="winAll" type="button">하루 전체</button>
   </div>
   <span class="lbl" id="winNote" style="font-size:12px;color:var(--muted)"></span>
+  <div class="grp" style="flex-basis:100%"><label class="mk"><input type="checkbox" id="markChk"> 누른 봉에 시각·가격 표시</label><button id="markClr" type="button">이 날 표시 지우기</button><span class="lbl" id="markNote"></span></div>
 </section>
 
 <section class="detail" aria-label="선택한 날 차트">
@@ -257,7 +259,15 @@ function drawChart(g,W,H,x,A=WS,B=WE){const v=view(x),sk=SHOW?STOCK[x.d]:null,sp
   const b=v.b,wk=bw>12?2:1;g.save();g.beginPath();g.rect(L,T,pw,ph);g.clip();
   for(let i=0;i<v.n;i++){if(v.off[i]+IV<=A||v.off[i]>=B)continue;const o=b[i*5],h=b[i*5+1],l=b[i*5+2],c=b[i*5+3],xx=X(v.off[i]);g.fillStyle=c>=o?up:dn;
     g.fillRect(Math.round(xx-wk/2),Y(h),wk,Math.max(1,Y(l)-Y(h)));const w=Math.max(1,bw*.7),y1=Y(Math.max(o,c)),y2=Y(Math.min(o,c));g.fillRect(xx-w/2,y1,w,Math.max(1,y2-y1))}
-  g.restore();g.textBaseline='middle';g.font='600 11px '+css('--mono');
+  g.restore();
+  const mk=MARKS[x.d];if(mk&&mk.length){g.font='600 11px '+css('--mono');g.textBaseline='middle';g.textAlign='left';
+    for(const m of mk){if(m<A||m>=B)continue;let lo2=0,hi2=v.n-1,k=-1;while(lo2<=hi2){const md=(lo2+hi2)>>1;if(v.off[md]<=m){k=md;lo2=md+1}else hi2=md-1}
+      if(k<0||m>=v.off[k]+IV)continue;const q=k*5,xx=X(v.off[k]),s=clock(v.off[k])+' · '+p(b[q+3]),w=g.measureText(s).width+12,h=18;
+      let by=Y(b[q+1])-10-h,dn2=false;if(by<T){by=Y(b[q+2])+10;dn2=true}const bx=Math.max(L,Math.min(L+pw-w,xx-w/2));
+      g.strokeStyle=fg;g.lineWidth=1;g.beginPath();g.moveTo(Math.round(xx)+.5,dn2?by:by+h);g.lineTo(Math.round(xx)+.5,dn2?Y(b[q+2])+2:Y(b[q+1])-2);g.stroke();
+      g.fillStyle=fg;g.beginPath();g.roundRect?g.roundRect(bx,by,w,h,4):g.rect(bx,by,w,h);g.fill();g.fillStyle=css('--bg');g.fillText(s,bx+6,by+h/2+.5);
+      g.beginPath();g.arc(xx,Y(b[q+3]),3,0,7);g.fillStyle=fg;g.fill()}}
+  g.textBaseline='middle';g.font='600 11px '+css('--mono');
   [[hiI,vh,-1,'고 '],[loI,vl,1,'저 ']].forEach(([i,q,dir,t])=>{const xx=X(v.off[i]),y=Y(q)+dir*10;g.fillStyle=fg;const right=xx>L+pw-110;g.textAlign=right?'right':'left';g.fillText(t+p(q)+' '+clock(v.off[i]),xx+(right?-4:4),y)});
   return {L,pw,span,v,T,ph,hi,lo,A,B}}
 function stockTxt(x,html){const sk=STOCK[x.d];if(!sk)return '주식: 미국장 휴장(주말·공휴일)';const s=sgn((sk[1]/sk[0]-1)*100);
@@ -275,7 +285,7 @@ function select(i,scroll){sel=Math.max(0,Math.min(LAST,i));const x=dayInfo[sel];
   if(!v||!v.n){e.textContent='';kv.textContent=`${IV}분봉 · 이 시간대에는 데이터가 없습니다`}
   else{const pc=pctV(v);e.textContent=sgn(pc);e.className='chg '+(pc>=0?'up':'down');
     kv.innerHTML=`${IV}분봉 · 시 <b>${p(v.o)}</b> 고 <b>${p(v.h)}</b> (${clock(v.off[v.hi])}) 저 <b>${p(v.l)}</b> (${clock(v.off[v.li])}) 종 <b>${p(v.c)}</b> · ${v.n}봉${SHOW?' &nbsp;|&nbsp; '+stockTxt(x,true):''}`}
-  drawBig();
+  drawBig();markNote();
   if(scroll)document.querySelector('.detail').scrollIntoView({behavior:'smooth',block:'start'})}
 /* ---------- 봉에 커서·손가락을 대면 정보 상자 (시간·종가·시가·고가·저가) ---------- */
 const chV=document.getElementById('chV'),chH=document.getElementById('chH'),chP=document.getElementById('chP');let tipK=-1,pinned=false,downXY=null;
@@ -302,10 +312,20 @@ big.style.touchAction='pan-y';
 big.addEventListener('pointermove',ev=>{if(ev.pointerType!=='mouse'||(drag&&drag.moved))return;const r=big.getBoundingClientRect();showTip(ev.clientX-r.left,ev.clientY-r.top,false)});
 big.addEventListener('pointerleave',ev=>{if(ev.pointerType==='mouse')hideTip()});
 big.addEventListener('pointerdown',ev=>{if(ev.pointerType!=='mouse')downXY=[ev.clientX,ev.clientY]});
-big.addEventListener('pointerup',ev=>{if(ev.pointerType==='mouse'||!downXY)return;const moved=Math.hypot(ev.clientX-downXY[0],ev.clientY-downXY[1]);downXY=null;
+big.addEventListener('pointerup',ev=>{if(ev.pointerType==='mouse'||!downXY||MARK)return;const moved=Math.hypot(ev.clientX-downXY[0],ev.clientY-downXY[1]);downXY=null;
   if(moved>10)return;const r=big.getBoundingClientRect();showTip(ev.clientX-r.left,ev.clientY-r.top,true);if(!tip.hidden){pinned=true;tip.classList.add('pin')}});
 document.addEventListener('pointerdown',ev=>{if(pinned&&ev.target!==big&&!tip.contains(ev.target))hideTip()});
 addEventListener('resize',hideTip);
+/* ---------- 봉 표시(체크하면 누른 봉에 시각·가격이 계속 붙어 있음, 다시 누르면 지움, 브라우저에 기억) ---------- */
+let MARK=false,MARKS={},clickXY=null;try{MARKS=JSON.parse(localStorage.getItem('chart_marks_'+SYM)||'{}')||{}}catch(e){MARKS={}}
+const saveMarks=()=>{try{localStorage.setItem('chart_marks_'+SYM,JSON.stringify(MARKS))}catch(e){}};
+const markNote=()=>{const n=(MARKS[dayInfo[sel].d]||[]).length;document.getElementById('markNote').textContent=MARK?(n?`이 날 ${n}개 표시됨 · 봉을 누르면 표시/지우기`:'봉을 누르면 그 봉에 시각·가격이 붙습니다'):(n?`이 날 ${n}개 표시됨`:'')};
+function toggleMark(cx){if(!geo)return;const r=big.getBoundingClientRect(),k=barAt(cx-r.left);if(k<0)return;const o=geo.v.off[k],d=dayInfo[sel].d,arr=MARKS[d]||[];
+  const hit=arr.filter(m=>m>=o&&m<o+IV);MARKS[d]=hit.length?arr.filter(m=>!(m>=o&&m<o+IV)):arr.concat(o);if(!MARKS[d].length)delete MARKS[d];saveMarks();hideTip();drawBig();markNote()}
+document.getElementById('markChk').onchange=e=>{MARK=e.target.checked;hideTip();markNote()};
+document.getElementById('markClr').onclick=()=>{delete MARKS[dayInfo[sel].d];saveMarks();drawBig();markNote()};
+big.addEventListener('pointerdown',ev=>{clickXY=[ev.clientX,ev.clientY]});
+big.addEventListener('pointerup',ev=>{if(!MARK||!clickXY||scrub)return;const moved=Math.hypot(ev.clientX-clickXY[0],ev.clientY-clickXY[1]);clickXY=null;if(moved<=8&&ptrs.size<=1)toggleMark(ev.clientX)});
 /* 꾹 누르고(0.28초) 그대로 옆으로 움직이면 닿는 봉마다 정보 상자 (밀어서 넘기기와 구분) */
 let holdT=0,scrub=false,hold0=null;
 big.addEventListener('pointerdown',ev=>{if(ev.pointerType==='mouse')return;clearTimeout(holdT);hold0=[ev.clientX,ev.clientY];
