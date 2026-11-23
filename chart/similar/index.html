@@ -56,6 +56,13 @@ canvas{display:block;width:100%}
 .sc{overflow-x:auto;overflow-y:hidden;cursor:grab;-webkit-overflow-scrolling:touch;padding-bottom:4px}
 .sc h3{position:sticky;left:0;display:inline-block;margin-top:6px}
 .sc canvas{width:auto;max-width:none}
+.sc{touch-action:pan-y;overflow:hidden;cursor:grab;user-select:none;-webkit-user-select:none}
+.cw{position:relative;display:inline-block}
+.cw .ov{position:absolute;left:0;top:0;pointer-events:none}
+.ztool{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ztool .btn2{min-width:40px;font-size:16px;padding:3px 10px}
+.ci{position:sticky;top:0;z-index:2;background:var(--panel);font-family:var(--mono);font-size:12px;color:var(--fg);min-height:2.6em;padding:4px 0;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.ci b{font-weight:600}
 </style>
 </head>
 <body>
@@ -285,6 +292,7 @@ function candles(cv,bars,{ratio=0.56,i0=0,hl=null,sess=null,labels=true,yTicks=t
     if(n>60){const step=[10,20,40,80,160].find(s=>n/s<=fit)||160;
       for(let i=0;i<=n;i+=step)g.fillText(clock(i0+i),Math.min(Math.max(L+i*pw/n,14),W-14),T+ph+5)}
     else{const step=Math.ceil(n/fit);for(let i=0;i<n;i+=step)g.fillText(clock(i0+i),Math.min(Math.max(X(i),14),W-14),T+ph+5)}}
+  return cv._geo={L,T,pw,ph,hi,lo,n,i0,W,H,bars,Y,X};
 }
 function niceStep(r){const p=10**Math.floor(Math.log10(r)),m=r/p;return (m<1.5?1:m<3.5?2:m<7.5?5:10)*p}
 
@@ -340,17 +348,89 @@ function drawResults(){
     sec.innerHTML='<div class="rk">'+(k+1)+'순위 &nbsp;<span>'+r.d+'</span> ('+wdOf(r.d)+')'+(CFG.x?' <span style="font-size:13px;font-weight:500;color:var(--muted)">전날 = '+prevDay(r.d)+' ('+wdOf(prevDay(r.d))+')</span>':'')+'</div>'+
       '<div class="kv">차이 '+r.dist.toFixed(3)+' · '+segTxt(n)+' '+seg[0][0].toFixed(2)+'→'+seg[n-1][3].toFixed(2)+' ('+pc((seg[n-1][3]/seg[0][0]-1)*100)+')'+
       ' · '+clock(CFG.d0)+'~'+endL()+': 시가 '+o0.toFixed(2)+' 고가 '+hi.toFixed(2)+'('+pc((hi/o0-1)*100)+') 저가 '+lo.toFixed(2)+'('+pc((lo/o0-1)*100)+') '+endL()+' '+endc.toFixed(2)+'('+pc((endc/o0-1)*100)+')</div>'+
-      '<div class="sc"><h3>기준 · '+refTxt+'</h3><canvas></canvas>'+
-      '<h3>'+(k+1)+'순위 '+r.d+' ('+wdOf(r.d)+') · '+clock(CFG.d0)+' ~ '+endL()+' (주황 = 비교한 부분'+(CFG.d0<480&&CFG.e>480?', 점선 = 09:00 날짜 바뀜':'')+')</h3><canvas></canvas></div><div class="sub">← 차트를 옆으로 밀어서 하루 전체(09:00 ~ 익일 09:00)를 볼 수 있습니다</div>';
+      '<div class="ztool"><button class="btn2" data-z="-1" type="button" aria-label="축소">－</button><button class="btn2" data-z="1" type="button" aria-label="확대">＋</button><button class="btn2" data-z="0" type="button">기본</button>'+
+      '<span class="sub">두 손가락 벌리기·휠 = 확대/축소 · 옆으로 밀기 = 이동 · 누르기(마우스 올리기) = 그 시각 값</span></div>'+
+      '<div class="ci">차트를 누르면 그 시각의 시가·고가·저가·종가가 여기 나옵니다</div>'+
+      '<div class="sc"><h3>기준 · '+refTxt+'</h3><div class="cw"><canvas></canvas><canvas class="ov"></canvas></div>'+
+      '<h3>'+(k+1)+'순위 '+r.d+' ('+wdOf(r.d)+') · '+clock(CFG.d0)+' ~ '+endL()+' (주황 = 비교한 부분'+(CFG.d0<480&&CFG.e>480?', 점선 = 09:00 날짜 바뀜':'')+')</h3><div class="cw"><canvas></canvas><canvas class="ov"></canvas></div></div>';
     box.appendChild(sec);
-    const [c1,c2]=sec.querySelectorAll('canvas');
-    // 위 = 기준(내가 고른 시간대, 모든 순위에서 같은 그림), 아래 = 그 순위 날. 시간축을 똑같이 맞춤
-    const PX=innerWidth<=640?5:6,HT=innerWidth<=640?220:240;
-    candles(c1,ref,{hl:HL,i0:CFG.d0,cut:480-CFG.d0,yTicks:!!LIVEQ,px:PX,height:HT});
-    candles(c2,win,{hl:HL,i0:CFG.d0,cut:480-CFG.d0,px:PX,height:HT});
-    const sc=sec.querySelector('.sc');sc.scrollLeft=Math.max(0,6+HL[0]*PX-30);   // 처음엔 비교 구간이 보이게
-    dragScroll(sc);
+    interactive(sec,ref,win,HL,o0);
   });
+}
+
+/* ---------- 순위 차트: 진짜 차트처럼 확대·축소, 밀기, 십자선 ----------
+   보이는 부분만 그리고, 세로 눈금은 보이는 캔들에 맞춰 자동으로 맞춤. 위(기준)·아래(순위 날)는 같은 시간축으로 같이 움직임 */
+const PX0=()=>innerWidth<=640?5:6;
+function interactive(sec,ref,win,HL,o0){
+  const sc=sec.querySelector('.sc'),cvs=[...sec.querySelectorAll('.cw canvas:not(.ov)')],ovs=[...sec.querySelectorAll('.cw .ov')],ci=sec.querySelector('.ci');
+  const DATA=[ref,win],N=win.length,HT=innerWidth<=640?230:270,L=6,R=50,T=8,B=20;
+  let px=PX0(),off=0,cross=null,W=0;
+  const vis=()=>(W-L-R)/px;
+  const clamp=()=>{const v=vis();off=Math.max(-v*0.3,Math.min(N-v*0.7,off))};
+  function size(){W=sc.clientWidth;const dp=window.devicePixelRatio||1;
+    for(const c of [...cvs,...ovs]){c.style.width=W+'px';c.style.height=HT+'px';c.width=Math.round(W*dp);c.height=Math.round(HT*dp);c.getContext('2d').setTransform(dp,0,0,dp,0,0)}}
+  function draw(){clamp();const pw=W-L-R,ph=HT-T-B,a=Math.max(0,Math.floor(off)),z=Math.min(N,Math.ceil(off+pw/px)+1),X=i=>L+(i-off+0.5)*px,bw=Math.max(1,px*0.68);
+    cvs.forEach((cv,k)=>{const g=cv.getContext('2d'),bars=DATA[k],yT=k===1||!!LIVEQ;g.clearRect(0,0,W,HT);
+      let hi=-Infinity,lo=Infinity;for(let i=a;i<z;i++){const b=bars[i];if(b){hi=Math.max(hi,b[1]);lo=Math.min(lo,b[2])}}
+      const empty=hi===-Infinity;if(empty){hi=1;lo=0}if(hi===lo){hi+=hi*0.001||1;lo-=lo*0.001||1}const pad=(hi-lo)*0.08;hi+=pad;lo-=pad;
+      const Y=v=>T+(hi-v)/(hi-lo)*ph;cv._g={hi,lo,Y,ph,pw};
+      g.save();g.beginPath();g.rect(L,0,pw,HT);g.clip();
+      // 비교 구간(주황) · 09:00 점선
+      g.fillStyle=css('--hl');g.fillRect(X(HL[0])-px/2,T,(HL[1]-HL[0])*px,ph);
+      const cut=480-CFG.d0;if(cut>0&&cut<N){const xc=Math.round(X(cut)-px/2)+.5;g.strokeStyle=css('--muted');g.setLineDash([4,3]);g.beginPath();g.moveTo(xc,T);g.lineTo(xc,T+ph);g.stroke();g.setLineDash([])}
+      // 가로 눈금
+      g.strokeStyle=css('--grid');g.lineWidth=1;const st=niceStep((hi-lo)/4),ys=[];if(!empty)for(let v=Math.ceil(lo/st)*st;v<=hi;v+=st){const y=Math.round(Y(v))+.5;ys.push([v,y]);g.beginPath();g.moveTo(L,y);g.lineTo(L+pw,y);g.stroke()}
+      // 캔들
+      const up=css('--up'),dn=css('--down');
+      for(let i=a;i<z;i++){const b=bars[i];if(!b)continue;const [o,h,l,c]=b,x=X(i),col=c>=o?up:dn;g.strokeStyle=col;g.beginPath();g.moveTo(Math.round(x)+.5,Y(h));g.lineTo(Math.round(x)+.5,Y(l));g.stroke();
+        g.fillStyle=col;const y1=Y(Math.max(o,c)),y2=Y(Math.min(o,c));g.fillRect(x-bw/2,y1,bw,Math.max(1,y2-y1))}
+      g.restore();
+      // 오른쪽 가격 눈금 · 아래 시각
+      g.font='10px '+css('--mono');g.fillStyle=css('--muted');g.textBaseline='middle';g.textAlign='left';
+      if(yT&&!empty)ys.forEach(([v,y])=>g.fillText(v.toFixed(v<10?3:2),L+pw+4,y));
+      g.textAlign='center';g.textBaseline='top';const mins=[3,6,15,30,60,120,240].find(m=>m/3*px>=56)||240,step=mins/3;
+      for(let i=Math.ceil(off/step)*step;i<z;i+=step){const x=X(i)-px/2;if(x<L+10||x>L+pw-10)continue;g.fillText(clock(CFG.d0+i),x,T+ph+5)}});
+    drawCross()}
+  function drawCross(){ovs.forEach(o=>o.getContext('2d').clearRect(0,0,W,HT));if(!cross)return;
+    const i=cross.i,fg=css('--fg'),pn=css('--panel'),x=Math.round(L+(i-off+0.5)*px)+.5;
+    ovs.forEach((o,k)=>{const g=o.getContext('2d'),G=cvs[k]._g;g.strokeStyle=fg;g.globalAlpha=.6;g.setLineDash([3,3]);g.beginPath();g.moveTo(x,T);g.lineTo(x,T+G.ph);g.stroke();
+      if(cross.k===k){const y=Math.round(cross.y)+.5;if(y>T&&y<T+G.ph){g.beginPath();g.moveTo(L,y);g.lineTo(L+G.pw,y);g.stroke();
+        if(k===1||LIVEQ){g.setLineDash([]);g.globalAlpha=1;const v=G.hi-(cross.y-T)/G.ph*(G.hi-G.lo),t=v.toFixed(v<10?3:2);g.font='600 11px '+css('--mono');const w=g.measureText(t).width+8;
+          g.fillStyle=fg;g.fillRect(L+G.pw+1,y-8,w,16);g.fillStyle=pn;g.textAlign='left';g.textBaseline='middle';g.fillText(t,L+G.pw+5,y)}}}
+      g.setLineDash([]);g.globalAlpha=1;g.font='600 11px '+css('--mono');const tt=clock(CFG.d0+i),tw=g.measureText(tt).width+8,tx=Math.max(L,Math.min(L+G.pw-tw,x-tw/2));
+      g.fillStyle=fg;g.fillRect(tx,T+G.ph+2,tw,15);g.fillStyle=pn;g.textAlign='left';g.textBaseline='top';g.fillText(tt,tx+4,T+G.ph+4)});
+    const f=v=>v.toFixed(v<10?3:2),b=win[i],q=ref[i],pc=v=>(v>=0?'+':'')+v.toFixed(2)+'%',day=CFG.d0+i<480?'전날 ':'';
+    ci.innerHTML='<b>'+day+clock(CFG.d0+i)+'</b>'+(b?' · 이 날 시 <b>'+f(b[0])+'</b> 고 <b>'+f(b[1])+'</b> 저 <b>'+f(b[2])+'</b> 종 <b style="color:var('+(b[3]>=b[0]?'--up':'--down')+')">'+f(b[3])+'</b> ('+pc((b[3]/o0-1)*100)+' 시작 대비)':' · 이 날 데이터 없음')+
+      (q&&LIVEQ?' · 기준 종 <b>'+f(q[3])+'</b>':'')}
+  const idxAt=cx=>{const r=cvs[1].getBoundingClientRect();return Math.max(0,Math.min(N-1,Math.floor(off+(cx-r.left-L)/px)))};
+  const kAt=t=>cvs.indexOf(t)>=0?cvs.indexOf(t):ovs.indexOf(t);
+  function setCross(cx,cy,t){const k=Math.max(0,kAt(t)),r=cvs[k].getBoundingClientRect();cross={i:idxAt(cx),k,y:cy-r.top};drawCross()}
+  function zoom(f,cx){const r=cvs[1].getBoundingClientRect(),x=(cx==null?r.left+W/2:cx)-r.left-L,idx=off+x/px;
+    px=f===0?PX0():Math.max(1.5,Math.min(60,px*f));off=idx-x/px;draw()}
+  // 마우스: 끌기 = 이동, 휠 = 확대·축소, 올리기 = 십자선
+  let md=null;
+  // (터치가 흉내 내는 마우스 이벤트와 섞이지 않게 pointerType이 mouse인 것만)
+  sc.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse')return;md={x:e.clientX,o:off};sc.style.cursor='grabbing';e.preventDefault()});
+  addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&md){off=md.o-(e.clientX-md.x)/px;draw()}});
+  addEventListener('pointerup',e=>{if(e.pointerType==='mouse'&&md){md=null;sc.style.cursor=''}});
+  sc.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&!md&&kAt(e.target)>=0)setCross(e.clientX,e.clientY,e.target)});
+  sc.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'&&!md){cross=null;drawCross()}});
+  sc.addEventListener('wheel',e=>{e.preventDefault();if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){off+=e.deltaX/px;draw()}else zoom(e.deltaY<0?1.15:1/1.15,e.clientX)},{passive:false});
+  // 터치: 한 손가락 = 옆으로 이동(세로는 페이지 스크롤), 두 손가락 = 확대·축소, 짧게 누르기 = 십자선
+  const pts=new Map();let pinch=null,pan=null,tap=null;
+  sc.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(pts.size===2){const [a,b]=[...pts.values()];pinch={d:Math.hypot(a.x-b.x,a.y-b.y),px,cx:(a.x+b.x)/2};pan=null;tap=null}
+    else{pan={x:e.clientX,o:off};tap={x:e.clientX,y:e.clientY,t:e.target}}});
+  sc.addEventListener('pointermove',e=>{if(!pts.has(e.pointerId))return;pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(tap&&Math.hypot(e.clientX-tap.x,e.clientY-tap.y)>8)tap=null;
+    if(pinch&&pts.size===2){const [a,b]=[...pts.values()],d=Math.hypot(a.x-b.x,a.y-b.y),r=cvs[1].getBoundingClientRect(),x=pinch.cx-r.left-L,idx=off+x/px;
+      px=Math.max(1.5,Math.min(60,pinch.px*d/pinch.d));off=idx-x/px;draw()}
+    else if(pan){off=pan.o-(e.clientX-pan.x)/px;draw()}});
+  const end=e=>{if(tap&&e.type==='pointerup'&&kAt(tap.t)>=0)setCross(tap.x,tap.y,tap.t);tap=null;pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!pts.size)pan=null};
+  sc.addEventListener('pointerup',end);sc.addEventListener('pointercancel',end);
+  sec.querySelectorAll('[data-z]').forEach(b=>b.addEventListener('click',()=>{const z=+b.dataset.z;if(z===0){px=PX0();off=HL[0]-3;draw()}else zoom(z>0?1.5:1/1.5)}));
+  size();off=Math.max(0,HL[0]-3);draw();   // 처음엔 비교 구간부터
+  new ResizeObserver(()=>{if(sc.clientWidth!==W){size();draw()}}).observe(sc);
 }
 
 /* ---------- 1~5순위 사진을 ZIP(폴더)으로 저장 ----------
