@@ -408,7 +408,7 @@ function interactive(sec,ref,win,HL,o0){
       g.textAlign='center';g.textBaseline='top';const mins=[3,6,15,30,60,120,240].find(m=>m/3*px>=56)||240,step=mins/3;
       for(let i=Math.ceil(off/step)*step;i<z;i+=step){const x=X(i)-px/2;if(x<L+10||x>L+pw-10)continue;g.fillText(clock(CFG.d0+i),x,T+ph+5)}});
     drawCross()}
-  function drawCross(){ovs.forEach(o=>o.getContext('2d').clearRect(0,0,W,HT));if(!cross)return;
+  function drawCross(){ovs.forEach(o=>o.getContext('2d').clearRect(0,0,W,HT));boxHit=null;if(!cross)return;
     const i=cross.i,fg=css('--fg'),pn=css('--panel'),x=Math.round(L+(i-off+0.5)*px)+.5;
     ovs.forEach((o,k)=>{const g=o.getContext('2d'),G=cvs[k]._g;g.strokeStyle=fg;g.globalAlpha=.6;g.setLineDash([3,3]);g.beginPath();g.moveTo(x,T);g.lineTo(x,T+G.ph);g.stroke();
       if(cross.k===k){const y=Math.round(cross.y)+.5;if(y>T&&y<T+G.ph){g.beginPath();g.moveTo(L,y);g.lineTo(L+G.pw,y);g.stroke();
@@ -419,10 +419,15 @@ function interactive(sec,ref,win,HL,o0){
     {const kk=(cross.k===0&&!LIVEQ)?1:cross.k,bb=(kk===1?win:ref)[i];   // 사진 기준(모양만)일 땐 값이 없으니 아래 순위 날 차트에 표시
      if(bb){const g=ovs[kk].getContext('2d'),G=cvs[kk]._g,f2=v=>v.toFixed(v<10?3:2),
         rows=[['시간',(CFG.d0+i<480?'전날 ':'')+clock(CFG.d0+i)],['종가',f2(bb[3]),css(bb[3]>=bb[0]?'--up':'--down')],['시가',f2(bb[0])],['고가',f2(bb[1])],['저가',f2(bb[2])]];
-       const lh=17,pd=8,w=126,h=rows.length*lh+pd*2-3;let bx=x+12;if(bx+w>L+G.pw)bx=x-12-w;bx=Math.max(L,bx);
+       const lh=17,pd=8,w=126,hd=24,h=hd+rows.length*lh+pd*2-3;let bx=x+12;if(bx+w>L+G.pw)bx=x-12-w;bx=Math.max(L,bx);
        const cy=cross.k===kk?cross.y:T+G.ph/2,by=Math.max(T,Math.min(T+G.ph-h,cy-h/2));
        g.globalAlpha=.93;g.fillStyle=fg;g.beginPath();g.roundRect?g.roundRect(bx,by,w,h,7):g.rect(bx,by,w,h);g.fill();g.globalAlpha=1;g.textBaseline='top';
-       rows.forEach(([n,v,c],j)=>{const yy=by+pd+j*lh;g.textAlign='left';g.fillStyle=pn;g.globalAlpha=.75;g.font='12px '+css('--sans');g.fillText(n,bx+pd,yy);
+       // 맨 위: 이 봉 표시 체크박스(누르면 그 봉에 시각·가격 꼬리표)
+       const on=!!(MKS.get(sec.dataset.d+'|'+kk)||new Set()).has(i),cx0=bx+pd,cy0=by+pd;g.strokeStyle=pn;g.lineWidth=1.5;g.strokeRect(cx0+.5,cy0+.5,14,14);
+       if(on){g.fillStyle=css('--hlt');g.fillRect(cx0+2,cy0+2,11,11);g.strokeStyle=fg;g.lineWidth=2;g.beginPath();g.moveTo(cx0+4,cy0+8);g.lineTo(cx0+7,cy0+11);g.lineTo(cx0+12,cy0+4);g.stroke()}
+       g.fillStyle=pn;g.font='600 12px '+css('--sans');g.textAlign='left';g.fillText('이 봉 표시',cx0+20,cy0+1);g.lineWidth=1;
+       boxHit={k:kk,i,x:bx,y:by,w,h:hd+pd};
+       rows.forEach(([n,v,c],j)=>{const yy=by+pd+hd+j*lh;g.textAlign='left';g.fillStyle=pn;g.globalAlpha=.75;g.font='12px '+css('--sans');g.fillText(n,bx+pd,yy);
          g.globalAlpha=1;g.font='600 12px '+css('--mono');g.textAlign='right';g.fillStyle=c||pn;g.fillText(v,bx+w-pd,yy)})}}
     const f=v=>v.toFixed(v<10?3:2),b=win[i],q=ref[i],pc=v=>(v>=0?'+':'')+v.toFixed(2)+'%',day=CFG.d0+i<480?'전날 ':'';
     ci.innerHTML='<b>'+day+clock(CFG.d0+i)+'</b>'+(b?' · 이 날 시 <b>'+f(b[0])+'</b> 고 <b>'+f(b[1])+'</b> 저 <b>'+f(b[2])+'</b> 종 <b style="color:var('+(b[3]>=b[0]?'--up':'--down')+')">'+f(b[3])+'</b> ('+pc((b[3]/o0-1)*100)+' 시작 대비)':' · 이 날 데이터 없음')+
@@ -433,15 +438,18 @@ function interactive(sec,ref,win,HL,o0){
   function zoom(f,cx){const r=cvs[1].getBoundingClientRect(),x=(cx==null?r.left+W/2:cx)-r.left-L,idx=off+x/px;
     px=f===0?PX0():Math.max(1.5,Math.min(60,px*f));off=idx-x/px;req()}
   // 마우스: 끌기 = 이동, 휠 = 확대·축소, 올리기 = 십자선
-  let md=null;
+  let md=null,pinC=false,boxHit=null;
+  const inBox=(cx,cy)=>{if(!boxHit||!cross)return false;const r=cvs[boxHit.k].getBoundingClientRect(),x=cx-r.left,y=cy-r.top;return x>=boxHit.x&&x<=boxHit.x+boxHit.w&&y>=boxHit.y&&y<=boxHit.y+boxHit.h};
+  const boxToggle=()=>{const key=sec.dataset.d+'|'+boxHit.k,s=MKS.get(key)||new Set();s.has(boxHit.i)?s.delete(boxHit.i):s.add(boxHit.i);MKS.set(key,s);draw()};
   // 봉 표시 켜기/끄기 (체크했을 때 누르면)
   function togMark(cx,t){const k=Math.max(0,kAt(t)),i=idxAt(cx),key=sec.dataset.d+'|'+k,s=MKS.get(key)||new Set();if(!DATA[k][i])return;s.has(i)?s.delete(i):s.add(i);MKS.set(key,s);cross=null;draw()}
   // (터치가 흉내 내는 마우스 이벤트와 섞이지 않게 pointerType이 mouse인 것만)
   sc.addEventListener('pointerdown',e=>{if(e.pointerType!=='mouse')return;stopFl();md={x:e.clientX,o:off};sc.style.cursor='grabbing';e.preventDefault()});
   addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&md){off=md.o-(e.clientX-md.x)/px;track(e.clientX);req()}});
-  addEventListener('pointerup',e=>{if(e.pointerType==='mouse'&&md){const mv=Math.abs(e.clientX-md.x);md=null;sc.style.cursor='';if(mv<4&&MARKON()&&kAt(e.target)>=0)togMark(e.clientX,e.target);else fling()}});
-  sc.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&!md&&kAt(e.target)>=0)setCross(e.clientX,e.clientY,e.target)});
-  sc.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'&&!md){cross=null;drawCross()}});
+  addEventListener('pointerup',e=>{if(e.pointerType==='mouse'&&md){const mv=Math.abs(e.clientX-md.x);md=null;sc.style.cursor='';if(mv<4&&kAt(e.target)>=0){if(inBox(e.clientX,e.clientY))boxToggle();else if(MARKON())togMark(e.clientX,e.target);else{pinC=false;setCross(e.clientX,e.clientY,e.target);pinC=true}}else fling()}});
+  addEventListener('pointerdown',e=>{if(pinC&&e.pointerType==='mouse'&&!sc.contains(e.target)){pinC=false;cross=null;drawCross()}});
+  sc.addEventListener('pointermove',e=>{if(e.pointerType==='mouse'&&!md&&!pinC&&kAt(e.target)>=0)setCross(e.clientX,e.clientY,e.target)});
+  sc.addEventListener('pointerleave',e=>{if(e.pointerType==='mouse'&&!md&&!pinC){cross=null;drawCross()}});
   sc.addEventListener('wheel',e=>{e.preventDefault();stopFl();if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){off+=e.deltaX/px;req()}else zoom(e.deltaY<0?1.15:1/1.15,e.clientX)},{passive:false});
   // 터치: 한 손가락 = 옆으로 이동(세로는 페이지 스크롤), 두 손가락 = 확대·축소, 짧게 누르기 = 십자선
   const pts=new Map();let pinch=null,pan=null,tap=null,holdT=0,scrub=false,scrubT=null;
@@ -456,7 +464,7 @@ function interactive(sec,ref,win,HL,o0){
     if(pinch&&pts.size===2){const [a,b]=[...pts.values()],d=Math.hypot(a.x-b.x,a.y-b.y),r=cvs[1].getBoundingClientRect(),x=pinch.cx-r.left-L,idx=off+x/px;
       px=Math.max(1.5,Math.min(60,pinch.px*d/pinch.d));off=idx-x/px;req()}
     else if(pan){off=pan.o-(e.clientX-pan.x)/px;track(e.clientX);req()}});
-  const end=e=>{clearTimeout(holdT);if(scrub){scrub=false;pan=null;tap=null}if(tap&&e.type==='pointerup'&&kAt(tap.t)>=0){if(MARKON())togMark(tap.x,tap.t);else setCross(tap.x,tap.y,tap.t)}tap=null;pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!pts.size){if(pan&&e.type==='pointerup')fling();pan=null}};
+  const end=e=>{clearTimeout(holdT);if(scrub){scrub=false;pan=null;tap=null}if(tap&&e.type==='pointerup'&&kAt(tap.t)>=0){if(inBox(tap.x,tap.y))boxToggle();else if(MARKON())togMark(tap.x,tap.t);else setCross(tap.x,tap.y,tap.t)}tap=null;pts.delete(e.pointerId);if(pts.size<2)pinch=null;if(!pts.size){if(pan&&e.type==='pointerup')fling();pan=null}};
   sc.addEventListener('pointerup',end);sc.addEventListener('pointercancel',end);
   sec.querySelectorAll('[data-z]').forEach(b=>b.addEventListener('click',()=>{const z=+b.dataset.z;if(z===0){px=PX0();off=HL[0]-3;draw()}else zoom(z>0?1.5:1/1.5)}));
   redrawers.add(()=>{if(sec.isConnected)draw()});
